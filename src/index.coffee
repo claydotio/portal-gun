@@ -4,12 +4,11 @@ IS_FRAMED = window.self isnt window.top
 ONE_SECOND_MS = 1000
 
 class Poster
-  constructor: ({@isValidOrigin}) ->
-    @isValidOrigin ?= -> true
+  constructor: ->
     @lastMessageId = 0
     @pendingMessages = {}
 
-  postMessage: (method, params) =>
+  postMessage: (method, params = []) =>
     deferred = new Promise (@resolve, @reject) => null
     message = {method, params}
 
@@ -34,28 +33,15 @@ class Poster
 
     return deferred
 
-  onMessage: (e) =>
-    try
-      message = JSON.parse e.data
-      id = message.id
+  resolveMessage: (message) ->
+    if not @pendingMessages[message.id]
+      return Promise.reject 'Method not found'
 
-      unless message._portal
-        throw new Error 'Non-portal message'
+    else if message.error
+      @pendingMessages[message.id].reject message.error
 
-      unless @pendingMessages[id]
-        throw new Erro 'Pending not found'
-
-      unless @isValidOrigin e.origin
-        return @pendingMessages[id].reject \
-          new Error "Invalid origin #{e.origin}"
-
-      if message.error
-        @pendingMessages[message.id].reject message.error
-      else
-        @pendingMessages[message.id].resolve message.result
-
-    catch err
-      return
+    else
+      @pendingMessages[message.id].resolve message.result or null
 
 
 class PortalGun
@@ -63,12 +49,22 @@ class PortalGun
     @config =
       trusted: null
       subdomains: false
-    @poster = new Poster(isValidOrigin: @isValidOrigin)
+    @poster = new Poster()
+    @registerdMethods = {
+      ping: -> 'pong'
+    }
 
+  up: (config) =>
+    @config = _.defaults config, @config
+    window.addEventListener 'message', @onMessage
+
+  down: =>
+    window.removeEventListener 'message', @onMessage
 
   get: (method, params = []) =>
-    localMethod = (method, params) ->
-      return methodToFn(method).apply null, params
+    localMethod = (method, params) =>
+      fn = @registerdMethods[method] or -> throw new Error 'Method not found'
+      return fn.apply null, params
 
     if IS_FRAMED
       frameError = null
@@ -77,7 +73,7 @@ class PortalGun
         @poster.postMessage method, params
       .catch (err) ->
         frameError = err
-        return localMethod({method, params})
+        return localMethod method, params
       .catch (err) ->
         if err.message is 'Method not found' and frameError isnt null
           throw frameError
@@ -87,35 +83,79 @@ class PortalGun
       new Promise (resolve) ->
         resolve localMethod(method, params)
 
-  validateParent: ->
+  validateParent: =>
     @poster.postMessage 'ping'
 
   isValidOrigin: (origin) =>
-    unless @config.trusted
+    unless @config?.trusted
       return true
 
-    if @config.subdomains
-      regex = new RegExp '^https?://(\\w+\\.)?(\\w+\\.)?' +
+    regex = if @config.subdomains then \
+       new RegExp '^https?://(\\w+\\.)?(\\w+\\.)?' +
                          "#{@config.trusted.replace(/\./g, '\\.')}/?$"
-      return regex.test origin
-
-    else
-      regex = new RegExp '^https?://' +
+    else new RegExp '^https?://' +
                          "#{@config.trusted.replace(/\./g, '\\.')}/?$"
-      return regex.test origin
 
-  up: (config) ->
-    @config = _.defaults config, @config
-    window.addEventListener 'message', @poster.onMessage
+    return regex.test origin
 
-  down: ->
-    window.removeEventListener 'message', @poster.onMessage
+  onMessage: (e) =>
+    try
+      message = JSON.parse e.data
+
+      if not message._portal
+        throw new Error 'Non-portal message'
+
+      isResponse = message.result or message.error
+      isRequest = !!message.method
+
+      if isResponse
+        unless @isValidOrigin e.origin
+          message.error = {message: "Invalid origin #{e.origin}", code: -1}
+
+        @poster.resolveMessage message
+
+      else if isRequest
+        {id, method, params} = message
+
+        @get method, params
+        .then (result) ->
+          message = {id, result, _portal: true, jsonrpc: '2.0'}
+          e.source.postMessage JSON.stringify(message), '*'
+
+        .catch (err) ->
+
+          # json-rpc 2.0 error codes
+          code = switch err.message
+            when 'Method not found'
+              -32601
+            else
+              -1
+
+          message =
+            _portal: true
+            jsonrpc: '2.0'
+            id: id
+            error:
+              code: code
+              message: err.message
+
+          e.source.postMessage JSON.stringify(message), '*'
+
+      else
+        throw new Error 'Invalid message'
+
+    catch err
+      console.log err
+      return
+
+  register: (method, fn) =>
+    @registerdMethods[method] = fn
 
 
-
-module.exports = new PortalGun()
-
-methodToFn = (method) ->
-  switch method
-    when 'share.any' then shareAny
-    else -> throw new Error 'Method not found'
+portal = new PortalGun()
+module.exports = {
+  up: portal.up
+  down: portal.down
+  get: portal.get
+  register: portal.register
+}

@@ -29,10 +29,10 @@ packageConfig = require '../package.json'
 portal = rewire '../src/index'
 
 TRUSTED_DOMAIN = 'clay.io'
+
 postRoutes = {}
 
 portal.__set__ 'window.parent.postMessage', (messageString, targetOrigin) ->
-  # TODO
   targetOrigin.should.be '*'
   message = JSON.parse messageString
   message.id.should.be.a.Number
@@ -44,22 +44,54 @@ portal.__set__ 'window.parent.postMessage', (messageString, targetOrigin) ->
   if postRoutes[message.method].timeout
     return
 
+  result = postRoutes[message.method].data
+
+  if typeof result is 'function'
+    result = result(message)
+
   e = document.createEvent 'Event'
   e.initEvent 'message', true, true
 
   e.origin = postRoutes[message.method].origin or ('http://' + TRUSTED_DOMAIN)
   e.data = JSON.stringify _.defaults(
     {id: message.id, _portal: true}
-    postRoutes[message.method].data
+    result
   )
 
   window.dispatchEvent e
 
+dispatchEvent = (data) ->
+  new Promise (resolve, reject) ->
+    e = document.createEvent 'Event'
+    e.initEvent 'message', true, true
+
+    e.source =
+      postMessage: (messageString, targetOrigin) ->
+        targetOrigin.should.be '*'
+        message = JSON.parse messageString
+        message.id.should.be 1
+        message._portal.should.be true
+        message.jsonrpc.should.be '2.0'
+
+        if message.error
+          reject message.error
+        else
+          resolve message.result
+
+    e.origin = 'http://anysite.com'
+    e.data = JSON.stringify _.defaults(
+      {id: 1, _portal: true}
+      data
+    )
+
+    window.dispatchEvent e
+
 routePost = (method, {origin, data, timeout}) ->
   postRoutes[method] = {origin, data, timeout}
 
-routePost 'ping', {}
+routePost 'ping', data: {result: 'pong'}
 
+# TODO callbacks
 describe 'portal-gun', ->
   describe 'up()/down()', ->
     it 'comes up', (done) ->
@@ -191,6 +223,67 @@ describe 'portal-gun', ->
         , (err) ->
           err.message.indexOf('Invalid domain').should.not.be -1
 
-# TODO params (+ callbacks)
-# TODO local methods and fallbacks
-# TODO passes messages upwards
+  describe 'requests', ->
+    before ->
+      portal.up()
+
+    it 'handles ping', ->
+      dispatchEvent {method: 'ping'}
+      .then (result) ->
+        result.should.be 'pong'
+
+  describe 'request handlers', ->
+    before ->
+      portal.up()
+
+    it 'sends request up', ->
+      routePost 'ping',
+        data: (message) ->
+          result: message.params
+
+      dispatchEvent {method: 'ping', params: [{hello: 'world'}]}
+      .then (result) ->
+        result.should.be [{hello: 'world'}]
+
+        routePost 'ping',
+          data:
+            result: 'pong'
+
+    it 'falls back on error', ->
+      routePost 'ping',
+        data:
+          error: {code: -1, message: 'Error'}
+
+      dispatchEvent {method: 'ping'}
+      .then (result) ->
+        result.should.be 'pong'
+
+        routePost 'ping',
+          data:
+            result: 'pong'
+
+    describe 'register', ->
+      it 'registers basic functions', ->
+        portal.register 'abc', ->
+          return 'def'
+
+        dispatchEvent {method: 'abc'}
+        .then (res) ->
+          res.should.be 'def'
+
+      it 'registers basic functions with parameters', ->
+        portal.register 'add', (a, b) ->
+          return a + b
+
+        dispatchEvent {method: 'add', params: [1, 2]}
+        .then (res) ->
+          res.should.be 3
+
+
+      it 'registers promise returning functions', ->
+        portal.register 'def', ->
+          Promise.resolve 'abc'
+
+        dispatchEvent {method: 'def'}
+        .then (res) ->
+          res.should.be 'abc'

@@ -11,10 +11,10 @@ $ npm install portal-gun
 ## API
 
 `portal = require('portal-gun')`  
-`porta.up`  
-`porta.down`  
-`porta.get`  
-`porta.register`  
+`portal.up`  
+`portal.down`  
+`portal.get`  
+`portal.register`  
 
 ```coffee
 ###

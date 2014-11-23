@@ -20,9 +20,10 @@ $ npm install portal-gun
 ###
 # Bind global message event listener
 
-@param {Object} config
+@param {Object} [config]
 @param {String} config.trusted - trusted domain name e.g. 'clay.io'
 @param {Boolean} config.subdomains - trust subdomains of trusted domain
+@param {Number} config.timeout - global message timeout
 ###
 up: (config) =>
 ```

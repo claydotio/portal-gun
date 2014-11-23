@@ -54,12 +54,48 @@ module.exports =
 
 	ONE_SECOND_MS = 1000;
 
+
+	/*
+	 * Messages follow the json-rpc 2.0 spec: http://www.jsonrpc.org/specification
+	 * _portal is added to denote a portal-gun message
+
+	@typedef {Object} RPCRequest
+	@property {Integer} [id] - Without an `id` this is a notification
+	@property {String} method
+	@property {Array<*>} params
+	@property {Boolean} _clay - Must be true
+	@property {String} jsonrpc - Must be '2.0'
+
+	@typedef {Object} RPCResponse
+	@property {Integer} [id]
+	@property {*} result
+	@property {RPCError} error
+
+	@typedef {Object} RPCError
+	@property {Integer} code
+	@property {String} message
+	 */
+
 	Poster = (function() {
-	  function Poster() {
+	  function Poster(timeout) {
+	    this.timeout = timeout;
 	    this.postMessage = __bind(this.postMessage, this);
+	    this.setTimeout = __bind(this.setTimeout, this);
 	    this.lastMessageId = 0;
 	    this.pendingMessages = {};
 	  }
+
+	  Poster.prototype.setTimeout = function(timeout) {
+	    this.timeout = timeout;
+	    return null;
+	  };
+
+
+	  /*
+	  @param {String} method
+	  @param {Array} [params]
+	  @returns {Promise}
+	   */
 
 	  Poster.prototype.postMessage = function(method, params) {
 	    var deferred, err, id, message;
@@ -91,15 +127,20 @@ module.exports =
 	    }
 	    window.setTimeout(function() {
 	      return deferred.reject(new Error('Message Timeout'));
-	    }, ONE_SECOND_MS);
+	    }, this.timeout);
 	    return deferred;
 	  };
+
+
+	  /*
+	  @param {RPCResponse|RPCError}
+	   */
 
 	  Poster.prototype.resolveMessage = function(message) {
 	    if (!this.pendingMessages[message.id]) {
 	      return Promise.reject('Method not found');
 	    } else if (message.error) {
-	      return this.pendingMessages[message.id].reject(message.error);
+	      return this.pendingMessages[message.id].reject(new Error(message.error.message));
 	    } else {
 	      return this.pendingMessages[message.id].resolve(message.result || null);
 	    }
@@ -120,18 +161,42 @@ module.exports =
 	    this.up = __bind(this.up, this);
 	    this.config = {
 	      trusted: null,
-	      subdomains: false
+	      subdomains: false,
+	      timeout: ONE_SECOND_MS
 	    };
-	    this.poster = new Poster();
-	    this.registerdMethods = {
+	    this.poster = new Poster({
+	      timeout: this.config.timeout
+	    });
+	    this.registeredMethods = {
 	      ping: function() {
 	        return 'pong';
 	      }
 	    };
 	  }
 
-	  PortalGun.prototype.up = function(config) {
-	    this.config = _.defaults(config, this.config);
+
+	  /*
+	   * Bind global message event listener
+	  
+	  @param {Object} config
+	  @param {String} config.trusted - trusted domain name e.g. 'clay.io'
+	  @param {Boolean} config.subdomains - trust subdomains of trusted domain
+	  @param {Number} config.timeout - global message timeout
+	   */
+
+	  PortalGun.prototype.up = function(_arg) {
+	    var subdomains, timeout, trusted, _ref;
+	    _ref = _arg != null ? _arg : {}, trusted = _ref.trusted, subdomains = _ref.subdomains, timeout = _ref.timeout;
+	    if (trusted !== void 0) {
+	      this.config.trusted = trusted;
+	    }
+	    if (subdomains != null) {
+	      this.config.subdomains = subdomains;
+	    }
+	    if (timeout != null) {
+	      this.config.timeout = timeout;
+	    }
+	    this.poster.setTimeout(this.config.timeout);
 	    return window.addEventListener('message', this.onMessage);
 	  };
 
@@ -139,15 +204,24 @@ module.exports =
 	    return window.removeEventListener('message', this.onMessage);
 	  };
 
+
+	  /*
+	  @param {String} method
+	  @param {Array} [params]
+	   */
+
 	  PortalGun.prototype.get = function(method, params) {
 	    var frameError, localMethod;
 	    if (params == null) {
 	      params = [];
 	    }
+	    if (Object.prototype.toString.call(params) !== '[object Array]') {
+	      params = [params];
+	    }
 	    localMethod = (function(_this) {
 	      return function(method, params) {
 	        var fn;
-	        fn = _this.registerdMethods[method] || function() {
+	        fn = _this.registeredMethods[method] || function() {
 	          throw new Error('Method not found');
 	        };
 	        return fn.apply(null, params);
@@ -246,8 +320,16 @@ module.exports =
 	    }
 	  };
 
+
+	  /*
+	   * Register method to be called on child request, or local request fallback
+	  
+	  @param {String} method
+	  @param {Function} fn
+	   */
+
 	  PortalGun.prototype.register = function(method, fn) {
-	    return this.registerdMethods[method] = fn;
+	    return this.registeredMethods[method] = fn;
 	  };
 
 	  return PortalGun;

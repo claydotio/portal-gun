@@ -143,14 +143,16 @@ describe 'portal-gun', ->
         err.message.should.be 'abc'
 
     it 'times out', ->
-      portal.__set__ 'ONE_SECOND_MS', 10
+      portal.down()
+      portal.up trusted: TRUSTED_DOMAIN, timeout: 1
       routePost 'infinite.loop', timeout: true
 
       portal.get 'infinite.loop'
       .then ->
         throw new Error 'Missing error'
       ,(err) ->
-        portal.__set__ 'ONE_SECOND_MS', 1000
+        portal.down()
+        portal.up trusted: TRUSTED_DOMAIN, timeout: 1000
         err.message.should.be 'Message Timeout'
 
   describe 'domain verification', ->

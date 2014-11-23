@@ -28,9 +28,11 @@ ONE_SECOND_MS = 1000
 ###
 
 class Poster
-  constructor: ->
+  constructor: (@timeout) ->
     @lastMessageId = 0
     @pendingMessages = {}
+
+  setTimeout: (@timeout) => null
 
   ###
   @param {String} method
@@ -58,7 +60,7 @@ class Poster
 
     window.setTimeout ->
       deferred.reject new Error 'Message Timeout'
-    , ONE_SECOND_MS
+    , @timeout
 
     return deferred
 
@@ -81,8 +83,9 @@ class PortalGun
     @config =
       trusted: null
       subdomains: false
-    @poster = new Poster()
-    @registerdMethods = {
+      timeout: ONE_SECOND_MS
+    @poster = new Poster timeout: @config.timeout
+    @registeredMethods = {
       ping: -> 'pong'
     }
 
@@ -92,9 +95,16 @@ class PortalGun
   @param {Object} config
   @param {String} config.trusted - trusted domain name e.g. 'clay.io'
   @param {Boolean} config.subdomains - trust subdomains of trusted domain
+  @param {Number} config.timeout - global message timeout
   ###
-  up: (config) =>
-    @config = _.defaults config, @config
+  up: ({trusted, subdomains, timeout} = {}) =>
+    if trusted isnt undefined
+      @config.trusted = trusted
+    if subdomains?
+      @config.subdomains = subdomains
+    if timeout?
+      @config.timeout = timeout
+    @poster.setTimeout @config.timeout
     window.addEventListener 'message', @onMessage
 
   # Remove global message event listener
@@ -112,7 +122,7 @@ class PortalGun
       params = [params]
 
     localMethod = (method, params) =>
-      fn = @registerdMethods[method] or -> throw new Error 'Method not found'
+      fn = @registeredMethods[method] or -> throw new Error 'Method not found'
       return fn.apply null, params
 
     if IS_FRAMED
@@ -204,7 +214,7 @@ class PortalGun
   @param {Function} fn
   ###
   register: (method, fn) =>
-    @registerdMethods[method] = fn
+    @registeredMethods[method] = fn
 
 
 portal = new PortalGun()

@@ -1,13 +1,42 @@
+# TODO: Callbacks
 Promise = require 'promiz'
 
 IS_FRAMED = window.self isnt window.top
 ONE_SECOND_MS = 1000
+
+
+###
+# Messages follow the json-rpc 2.0 spec: http://www.jsonrpc.org/specification
+# _portal is added to denote a portal-gun message
+
+@typedef {Object} RPCRequest
+@property {Integer} [id] - Without an `id` this is a notification
+@property {String} method
+@property {Array<*>} params
+@property {Boolean} _clay - Must be true
+@property {String} jsonrpc - Must be '2.0'
+
+@typedef {Object} RPCResponse
+@property {Integer} [id]
+@property {*} result
+@property {RPCError} error
+
+@typedef {Object} RPCError
+@property {Integer} code
+@property {String} message
+
+###
 
 class Poster
   constructor: ->
     @lastMessageId = 0
     @pendingMessages = {}
 
+  ###
+  @param {String} method
+  @param {Array} [params]
+  @returns {Promise}
+  ###
   postMessage: (method, params = []) =>
     deferred = new Promise (@resolve, @reject) => null
     message = {method, params}
@@ -33,12 +62,15 @@ class Poster
 
     return deferred
 
+  ###
+  @param {RPCResponse|RPCError}
+  ###
   resolveMessage: (message) ->
     if not @pendingMessages[message.id]
       return Promise.reject 'Method not found'
 
     else if message.error
-      @pendingMessages[message.id].reject message.error
+      @pendingMessages[message.id].reject new Error message.error.message
 
     else
       @pendingMessages[message.id].resolve message.result or null
@@ -54,14 +86,31 @@ class PortalGun
       ping: -> 'pong'
     }
 
+  ###
+  # Bind global message event listener
+
+  @param {Object} config
+  @param {String} config.trusted - trusted domain name e.g. 'clay.io'
+  @param {Boolean} config.subdomains - trust subdomains of trusted domain
+  ###
   up: (config) =>
     @config = _.defaults config, @config
     window.addEventListener 'message', @onMessage
 
+  # Remove global message event listener
   down: =>
     window.removeEventListener 'message', @onMessage
 
+  ###
+  @param {String} method
+  @param {Array} [params]
+  ###
   get: (method, params = []) =>
+
+    # params should always be an array
+    unless Object::toString.call(params) is '[object Array]'
+      params = [params]
+
     localMethod = (method, params) =>
       fn = @registerdMethods[method] or -> throw new Error 'Method not found'
       return fn.apply null, params
@@ -148,6 +197,12 @@ class PortalGun
       console.log err
       return
 
+  ###
+  # Register method to be called on child request, or local request fallback
+
+  @param {String} method
+  @param {Function} fn
+  ###
   register: (method, fn) =>
     @registerdMethods[method] = fn
 

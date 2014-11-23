@@ -18,6 +18,18 @@ paths =
   dist: './dist/'
   build: './build/'
 
+webpackDistConfig =
+  module:
+    postLoaders: [
+      { test: /\.coffee$/, loader: 'transform/cacheable?envify' }
+    ]
+    loaders: [
+      { test: /\.coffee$/, loader: 'coffee' }
+      { test: /\.json$/, loader: 'json' }
+    ]
+  resolve:
+    extensions: ['.coffee', '.js', '.json', '']
+
 gulp.task 'build', ['clean:dist', 'scripts:dist']
 
 gulp.task 'test', ['scripts:test', 'lint'], (cb) ->
@@ -60,23 +72,28 @@ gulp.task 'test:phantom', ['scripts:test'], (cb) ->
 gulp.task 'clean:dist', (cb) ->
   del paths.dist, cb
 
-gulp.task 'scripts:dist', ['clean:dist'], ->
+gulp.task 'scripts:dist', ['scripts:dist:npm', 'scripts:dist:web']
+
+gulp.task 'scripts:dist:npm', ['clean:dist'], ->
   gulp.src paths.rootScripts
-  .pipe webpack
+  .pipe webpack _.defaults
     output:
       library: 'PortalGun'
-    module:
-      postLoaders: [
-        { test: /\.coffee$/, loader: 'transform/cacheable?envify' }
-      ]
-      loaders: [
-        { test: /\.coffee$/, loader: 'coffee' }
-        { test: /\.json$/, loader: 'json' }
-      ]
+      libraryTarget: 'commonjs2'
+  , webpackDistConfig
+
+  .pipe rename "#{packangeConf.name}.js"
+  .pipe gulp.dest paths.dist
+
+gulp.task 'scripts:dist:web', ['clean:dist'], ->
+  gulp.src paths.rootScripts
+  .pipe webpack _.defaults
+    output:
+      library: 'PortalGun'
     plugins: [
       new webpackSource.optimize.UglifyJsPlugin()
     ]
-    resolve:
-      extensions: ['.coffee', '.js', '.json', '']
-  .pipe rename "#{packangeConf.name}.js"
+  , webpackDistConfig
+
+  .pipe rename "#{packangeConf.name}.min.js"
   .pipe gulp.dest paths.dist

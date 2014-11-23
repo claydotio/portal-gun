@@ -35,7 +35,7 @@ postRoutes = {}
 portal.__set__ 'window.parent.postMessage', (messageString, targetOrigin) ->
   targetOrigin.should.be '*'
   message = JSON.parse messageString
-  message.id.should.be.a.Number
+  _.isNumber(message.id).should.be true
   message._portal.should.be true
   message.jsonrpc.should.be '2.0'
 
@@ -131,7 +131,7 @@ describe 'portal-gun', ->
       .then (user) ->
         user.test.should.be true
 
-    it 'recieved errors', ->
+    it 'recieves errors', ->
       routePost 'mirror',
         data:
           error: {message: 'abc'}
@@ -221,6 +221,7 @@ describe 'portal-gun', ->
         .then (res) ->
           throw new Error 'Missing error'
         , (err) ->
+          (err instanceof Error).should.be true
           err.message.indexOf('Invalid domain').should.not.be -1
 
   describe 'requests', ->

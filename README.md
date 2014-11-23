@@ -38,31 +38,6 @@ down: =>
 @param {Array} [params]
 ###
 get: (method, params = []) =>
-
-  # params should always be an array
-  unless Object::toString.call(params) is '[object Array]'
-    params = [params]
-
-  localMethod = (method, params) =>
-    fn = @registerdMethods[method] or -> throw new Error 'Method not found'
-    return fn.apply null, params
-
-  if IS_FRAMED
-    frameError = null
-    @validateParent()
-    .then =>
-      @poster.postMessage method, params
-    .catch (err) ->
-      frameError = err
-      return localMethod method, params
-    .catch (err) ->
-      if err.message is 'Method not found' and frameError isnt null
-        throw frameError
-      else
-        throw err
-  else
-    new Promise (resolve) ->
-      resolve localMethod(method, params)
 ```
 
 ```coffee

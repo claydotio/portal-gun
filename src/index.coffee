@@ -164,16 +164,9 @@ class PortalGun
       if not message._portal
         throw new Error 'Non-portal message'
 
-      isResponse = message.result isnt undefined or message.error isnt undefined
       isRequest = !!message.method
 
-      if isResponse
-        unless @isValidOrigin e.origin
-          message.error = {message: "Invalid origin #{e.origin}", code: -1}
-
-        @poster.resolveMessage message
-
-      else if isRequest
+      if isRequest
         {id, method, params} = message
 
         @get method, params
@@ -201,7 +194,10 @@ class PortalGun
           e.source.postMessage JSON.stringify(message), '*'
 
       else
-        throw new Error 'Invalid message'
+        unless @isValidOrigin e.origin
+          message.error = {message: "Invalid origin #{e.origin}", code: -1}
+
+        @poster.resolveMessage message
 
     catch err
       console.log err

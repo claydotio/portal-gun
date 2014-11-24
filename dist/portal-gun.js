@@ -264,23 +264,14 @@ module.exports =
 	  };
 
 	  PortalGun.prototype.onMessage = function(e) {
-	    var err, id, isRequest, isResponse, message, method, params;
+	    var err, id, isRequest, message, method, params;
 	    try {
 	      message = JSON.parse(e.data);
 	      if (!message._portal) {
 	        throw new Error('Non-portal message');
 	      }
-	      isResponse = message.result !== void 0 || message.error !== void 0;
 	      isRequest = !!message.method;
-	      if (isResponse) {
-	        if (!this.isValidOrigin(e.origin)) {
-	          message.error = {
-	            message: "Invalid origin " + e.origin,
-	            code: -1
-	          };
-	        }
-	        return this.poster.resolveMessage(message);
-	      } else if (isRequest) {
+	      if (isRequest) {
 	        id = message.id, method = message.method, params = message.params;
 	        return this.get(method, params).then(function(result) {
 	          message = {
@@ -312,7 +303,13 @@ module.exports =
 	          return e.source.postMessage(JSON.stringify(message), '*');
 	        });
 	      } else {
-	        throw new Error('Invalid message');
+	        if (!this.isValidOrigin(e.origin)) {
+	          message.error = {
+	            message: "Invalid origin " + e.origin,
+	            code: -1
+	          };
+	        }
+	        return this.poster.resolveMessage(message);
 	      }
 	    } catch (_error) {
 	      err = _error;

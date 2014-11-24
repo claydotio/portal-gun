@@ -282,7 +282,6 @@ describe 'portal-gun', ->
         .then (res) ->
           res.should.be 3
 
-
       it 'registers promise returning functions', ->
         portal.register 'def', ->
           Promise.resolve 'abc'

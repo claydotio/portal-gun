@@ -270,7 +270,7 @@ module.exports =
 	      if (!message._portal) {
 	        throw new Error('Non-portal message');
 	      }
-	      isResponse = message.result || message.error;
+	      isResponse = message.result !== void 0 || message.error !== void 0;
 	      isRequest = !!message.method;
 	      if (isResponse) {
 	        if (!this.isValidOrigin(e.origin)) {

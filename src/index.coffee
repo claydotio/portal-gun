@@ -164,7 +164,7 @@ class PortalGun
       if not message._portal
         throw new Error 'Non-portal message'
 
-      isResponse = message.result or message.error
+      isResponse = message.result isnt undefined or message.error isnt undefined
       isRequest = !!message.method
 
       if isResponse

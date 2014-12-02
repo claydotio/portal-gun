@@ -67,7 +67,7 @@ class Poster
   ###
   @param {RPCResponse|RPCError}
   ###
-  resolveMessage: (message) ->
+  resolveMessage: (message) =>
     if not @pendingMessages[message.id]
       return Promise.reject 'Method not found'
 

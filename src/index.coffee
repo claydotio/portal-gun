@@ -159,7 +159,7 @@ class PortalGun
 
   onMessage: (e) =>
     try
-      message = JSON.parse e.data
+      message = if typeof e.data is 'string' then JSON.parse(e.data) else e.data
 
       if not message._portal
         throw new Error 'Non-portal message'

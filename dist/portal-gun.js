@@ -79,6 +79,7 @@ module.exports =
 	Poster = (function() {
 	  function Poster(timeout) {
 	    this.timeout = timeout;
+	    this.resolveMessage = __bind(this.resolveMessage, this);
 	    this.postMessage = __bind(this.postMessage, this);
 	    this.setTimeout = __bind(this.setTimeout, this);
 	    this.lastMessageId = 0;
@@ -266,7 +267,7 @@ module.exports =
 	  PortalGun.prototype.onMessage = function(e) {
 	    var err, id, isRequest, message, method, params;
 	    try {
-	      message = JSON.parse(e.data);
+	      message = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
 	      if (!message._portal) {
 	        throw new Error('Non-portal message');
 	      }

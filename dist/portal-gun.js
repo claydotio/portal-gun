@@ -348,7 +348,40 @@ module.exports =
 /* 1 */
 /***/ function(module, exports, __webpack_require__) {
 
-	/* WEBPACK VAR INJECTION */(function(module) {(function () {
+	/* WEBPACK VAR INJECTION */(function(global, module) {(function () {
+	  global = this
+
+	  var queueId = 1
+	  var queue = {}
+	  var isRunningTask = false
+
+	  if (!global.setImmediate)
+	    global.addEventListener('message', function (e) {
+	      if (e.source == global){
+	        if (isRunningTask)
+	          nextTick(queue[e.data])
+	        else {
+	          isRunningTask = true
+	          try {
+	            queue[e.data]()
+	          } catch (e) {}
+
+	          delete queue[e.data]
+	          isRunningTask = false
+	        }
+	      }
+	    })
+
+	  function nextTick(fn) {
+	    if (global.setImmediate) setImmediate(fn)
+	    // if inside of web worker
+	    else if (global.importScripts) setTimeout(fn)
+	    else {
+	      queueId++
+	      queue[queueId] = fn
+	      global.postMessage(queueId, '*')
+	    }
+	  }
 
 	  Deferred.resolve = function (value) {
 	    if (!(this._d == 1))
@@ -480,7 +513,7 @@ module.exports =
 	        val = v
 	        state = 1
 
-	        setTimeout(fire)
+	        nextTick(fire)
 	      }
 	      return this
 	    }
@@ -492,7 +525,7 @@ module.exports =
 	        val = v
 	        state = 2
 
-	        setTimeout(fire)
+	        nextTick(fire)
 	      }
 	      return this
 	    }
@@ -611,11 +644,11 @@ module.exports =
 	  if (true) {
 	    module['exports'] = Deferred
 	  } else {
-	    this['Promise'] = Deferred
+	    global['Promise'] = global['Promise'] || Deferred
 	  }
 	})()
 	
-	/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(2)(module)))
+	/* WEBPACK VAR INJECTION */}.call(exports, (function() { return this; }()), __webpack_require__(2)(module)))
 
 /***/ },
 /* 2 */

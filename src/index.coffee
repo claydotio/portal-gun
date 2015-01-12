@@ -1,9 +1,19 @@
 # TODO: Callbacks
-Promise = require 'promiz'
+Promise = window.Promise or require 'promiz'
 
 IS_FRAMED = window.self isnt window.top
 ONE_SECOND_MS = 1000
 
+deferredFactory = ->
+  resolve = null
+  reject = null
+  promise = new Promise (_resolve, _reject) ->
+    resolve = _resolve
+    reject = _reject
+  promise.resolve = resolve
+  promise.reject = reject
+
+  return promise
 
 ###
 # Messages follow the json-rpc 2.0 spec: http://www.jsonrpc.org/specification
@@ -40,7 +50,7 @@ class Poster
   @returns {Promise}
   ###
   postMessage: (method, params = []) =>
-    deferred = new Promise (@resolve, @reject) => null
+    deferred = deferredFactory()
     message = {method, params}
 
     try

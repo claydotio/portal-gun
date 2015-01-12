@@ -45,14 +45,27 @@ module.exports =
 /* 0 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var IS_FRAMED, ONE_SECOND_MS, PortalGun, Poster, Promise, portal,
+	var IS_FRAMED, ONE_SECOND_MS, PortalGun, Poster, Promise, deferredFactory, portal,
 	  __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
 
-	Promise = __webpack_require__(1);
+	Promise = window.Promise || __webpack_require__(1);
 
 	IS_FRAMED = window.self !== window.top;
 
 	ONE_SECOND_MS = 1000;
+
+	deferredFactory = function() {
+	  var promise, reject, resolve;
+	  resolve = null;
+	  reject = null;
+	  promise = new Promise(function(_resolve, _reject) {
+	    resolve = _resolve;
+	    return reject = _reject;
+	  });
+	  promise.resolve = resolve;
+	  promise.reject = reject;
+	  return promise;
+	};
 
 
 	/*
@@ -103,13 +116,7 @@ module.exports =
 	    if (params == null) {
 	      params = [];
 	    }
-	    deferred = new Promise((function(_this) {
-	      return function(resolve, reject) {
-	        _this.resolve = resolve;
-	        _this.reject = reject;
-	        return null;
-	      };
-	    })(this));
+	    deferred = deferredFactory();
 	    message = {
 	      method: method,
 	      params: params

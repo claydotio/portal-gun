@@ -51,6 +51,17 @@ get: (method, params = []) =>
 register: (method, fn) =>
 ```
 
+```coffee
+# Must be called in the same tick as an interaction event
+beforeWindowOpen: =>
+
+###
+# Must be called after beginWindowOpen, and not later than 1 second after
+@param {String} url
+###
+windowOpen: (url) =>
+```
+
 ## Contributing
 
 ##### Install pre-commit hook

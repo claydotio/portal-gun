@@ -289,3 +289,26 @@ describe 'portal-gun', ->
         dispatchEvent {method: 'def'}
         .then (res) ->
           res.should.be 'abc'
+
+  describe 'window opening', ->
+    it 'doesnt open window if beforeWindowOpen is not called', (done) ->
+      window.open = ->
+        window.open = oldOpen
+        done new Error 'not suppose to happen'
+
+      portal.windowOpen('test')
+      setTimeout ->
+        done()
+      , 70
+
+    it 'opens window async', (done) ->
+      portal.beforeWindowOpen()
+
+      oldOpen = window.open
+      window.open = ->
+        window.open = oldOpen
+        done()
+
+      setTimeout ->
+        portal.windowOpen('test')
+      , 30

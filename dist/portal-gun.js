@@ -164,6 +164,8 @@ module.exports =
 	    this.onMessage = __bind(this.onMessage, this);
 	    this.isValidOrigin = __bind(this.isValidOrigin, this);
 	    this.validateParent = __bind(this.validateParent, this);
+	    this.windowOpen = __bind(this.windowOpen, this);
+	    this.beforeWindowOpen = __bind(this.beforeWindowOpen, this);
 	    this.get = __bind(this.get, this);
 	    this.down = __bind(this.down, this);
 	    this.up = __bind(this.up, this);
@@ -172,6 +174,7 @@ module.exports =
 	      subdomains: false,
 	      timeout: ONE_SECOND_MS
 	    };
+	    this.windowOpenQueue = [];
 	    this.poster = new Poster({
 	      timeout: this.config.timeout
 	    });
@@ -256,6 +259,35 @@ module.exports =
 	        return resolve(localMethod(method, params));
 	      });
 	    }
+	  };
+
+	  PortalGun.prototype.beforeWindowOpen = function() {
+	    var ms, _i, _results;
+	    _results = [];
+	    for (ms = _i = 0; _i <= 1000; ms = _i += 10) {
+	      _results.push(setTimeout((function(_this) {
+	        return function() {
+	          var url, _j, _len, _ref;
+	          _ref = _this.windowOpenQueue;
+	          for (_j = 0, _len = _ref.length; _j < _len; _j++) {
+	            url = _ref[_j];
+	            window.open(url);
+	          }
+	          return _this.windowOpenQueue = [];
+	        };
+	      })(this), ms));
+	    }
+	    return _results;
+	  };
+
+
+	  /*
+	   * Must be called after beginWindowOpen, and not later than 1 second after
+	  @param {String} url
+	   */
+
+	  PortalGun.prototype.windowOpen = function(url) {
+	    return this.windowOpenQueue.push(url);
 	  };
 
 	  PortalGun.prototype.validateParent = function() {
@@ -347,7 +379,9 @@ module.exports =
 	  up: portal.up,
 	  down: portal.down,
 	  get: portal.get,
-	  register: portal.register
+	  register: portal.register,
+	  beforeWindowOpen: portal.beforeWindowOpen,
+	  windowOpen: portal.windowOpen
 	};
 
 

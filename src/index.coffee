@@ -94,6 +94,7 @@ class PortalGun
       trusted: null
       subdomains: false
       timeout: ONE_SECOND_MS
+    @windowOpenQueue = []
     @poster = new Poster timeout: @config.timeout
     @registeredMethods = {
       ping: -> 'pong'
@@ -151,6 +152,22 @@ class PortalGun
     else
       new Promise (resolve) ->
         resolve localMethod(method, params)
+
+  # Must be called in the same tick as an interaction event
+  beforeWindowOpen: =>
+    for ms in [0..1000] by 10
+      setTimeout =>
+        for url in @windowOpenQueue
+          window.open url
+        @windowOpenQueue = []
+      , ms
+
+  ###
+  # Must be called after beginWindowOpen, and not later than 1 second after
+  @param {String} url
+  ###
+  windowOpen: (url) =>
+    @windowOpenQueue.push url
 
   validateParent: =>
     @poster.postMessage 'ping'
@@ -229,4 +246,6 @@ module.exports = {
   down: portal.down
   get: portal.get
   register: portal.register
+  beforeWindowOpen: portal.beforeWindowOpen
+  windowOpen: portal.windowOpen
 }

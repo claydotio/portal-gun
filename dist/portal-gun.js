@@ -45,14 +45,14 @@ module.exports =
 /* 0 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var IS_FRAMED, ONE_SECOND_MS, PortalGun, Poster, Promise, deferredFactory, portal,
+	var IS_FRAMED, PortalGun, Poster, Promise, REQUEST_TIMEOUT_MS, deferredFactory, portal,
 	  __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
 
 	Promise = window.Promise || __webpack_require__(1);
 
 	IS_FRAMED = window.self !== window.top;
 
-	ONE_SECOND_MS = 1000;
+	REQUEST_TIMEOUT_MS = 950;
 
 	deferredFactory = function() {
 	  var promise, reject, resolve;
@@ -172,7 +172,7 @@ module.exports =
 	    this.config = {
 	      trusted: null,
 	      subdomains: false,
-	      timeout: ONE_SECOND_MS
+	      timeout: REQUEST_TIMEOUT_MS
 	    };
 	    this.windowOpenQueue = [];
 	    this.poster = new Poster({

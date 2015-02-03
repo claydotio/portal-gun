@@ -2,7 +2,8 @@
 Promise = window.Promise or require 'promiz'
 
 IS_FRAMED = window.self isnt window.top
-ONE_SECOND_MS = 1000
+# window.open click timeout max is 1s, so timeout before then
+REQUEST_TIMEOUT_MS = 950
 
 deferredFactory = ->
   resolve = null
@@ -93,7 +94,7 @@ class PortalGun
     @config =
       trusted: null
       subdomains: false
-      timeout: ONE_SECOND_MS
+      timeout: REQUEST_TIMEOUT_MS
     @windowOpenQueue = []
     @poster = new Poster timeout: @config.timeout
     @registeredMethods = {

@@ -233,7 +233,6 @@ class PortalGun
         @poster.resolveMessage message
 
     catch err
-      console.log err
       return
 
   ###

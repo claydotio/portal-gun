@@ -332,3 +332,18 @@ describe 'portal-gun', ->
           , 30
         , 30
       , 30
+
+    it 'opens window async with args', (done) ->
+      portal.beforeWindowOpen()
+
+      oldOpen = window.open
+      window.open = (url, windowName, strWindowFeatures) ->
+        window.open = oldOpen
+        url.should.be 'http://test.com'
+        windowName.should.be '_system'
+        strWindowFeatures.should.be 'menubar=yes'
+        done()
+
+      setTimeout ->
+        portal.windowOpen('http://test.com', '_system', 'menubar=yes')
+      , 30

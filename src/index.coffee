@@ -157,23 +157,24 @@ class PortalGun
   # Must be called in the same tick as an interaction event
   beforeWindowOpen: =>
     sent = false
+    @windowOpenQueue = []
     for ms in [0..1000] by 10
       setTimeout =>
         if sent
           return
         if @windowOpenQueue.length > 0
           sent = true
-        for url in @windowOpenQueue
-          window.open url
+        for args in @windowOpenQueue
+          window.open.apply window, args
         @windowOpenQueue = []
       , ms
 
   ###
   # Must be called after beginWindowOpen, and not later than 1 second after
-  @param {String} url
+  # params: https://developer.mozilla.org/en-US/docs/Web/API/Window.open
   ###
-  windowOpen: (url) =>
-    @windowOpenQueue.push url
+  windowOpen: (args...) =>
+    @windowOpenQueue.push args
 
   validateParent: =>
     @poster.postMessage 'ping'

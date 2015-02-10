@@ -57,9 +57,9 @@ beforeWindowOpen: =>
 
 ###
 # Must be called after beginWindowOpen, and not later than 1 second after
-@param {String} url
+# params: https://developer.mozilla.org/en-US/docs/Web/API/Window.open
 ###
-windowOpen: (url) =>
+windowOpen: (url, windowName, strWindowFeatures) =>
 ```
 
 ## Contributing

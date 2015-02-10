@@ -312,3 +312,23 @@ describe 'portal-gun', ->
       setTimeout ->
         portal.windowOpen('test')
       , 30
+
+    it 'only opens once', (done) ->
+      portal.beforeWindowOpen()
+      callCnt = 0
+
+      oldOpen = window.open
+      window.open = ->
+        callCnt += 1
+
+      setTimeout ->
+        portal.windowOpen('test')
+        setTimeout ->
+          portal.windowOpen('test')
+          setTimeout ->
+            window.open = oldOpen
+            callCnt.should.be 1
+            done()
+          , 30
+        , 30
+      , 30

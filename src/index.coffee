@@ -156,8 +156,13 @@ class PortalGun
 
   # Must be called in the same tick as an interaction event
   beforeWindowOpen: =>
+    sent = false
     for ms in [0..1000] by 10
       setTimeout =>
+        if sent
+          return
+        if @windowOpenQueue.length > 0
+          sent = true
         for url in @windowOpenQueue
           window.open url
         @windowOpenQueue = []

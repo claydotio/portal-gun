@@ -46,7 +46,8 @@ module.exports =
 /***/ function(module, exports, __webpack_require__) {
 
 	var IS_FRAMED, PortalGun, Poster, Promise, REQUEST_TIMEOUT_MS, deferredFactory, portal,
-	  __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
+	  __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
+	  __slice = [].slice;
 
 	Promise = window.Promise || __webpack_require__(1);
 
@@ -262,16 +263,24 @@ module.exports =
 	  };
 
 	  PortalGun.prototype.beforeWindowOpen = function() {
-	    var ms, _i, _results;
+	    var ms, sent, _i, _results;
+	    sent = false;
+	    this.windowOpenQueue = [];
 	    _results = [];
 	    for (ms = _i = 0; _i <= 1000; ms = _i += 10) {
 	      _results.push(setTimeout((function(_this) {
 	        return function() {
-	          var url, _j, _len, _ref;
+	          var args, _j, _len, _ref;
+	          if (sent) {
+	            return;
+	          }
+	          if (_this.windowOpenQueue.length > 0) {
+	            sent = true;
+	          }
 	          _ref = _this.windowOpenQueue;
 	          for (_j = 0, _len = _ref.length; _j < _len; _j++) {
-	            url = _ref[_j];
-	            window.open(url);
+	            args = _ref[_j];
+	            window.open.apply(window, args);
 	          }
 	          return _this.windowOpenQueue = [];
 	        };
@@ -283,11 +292,13 @@ module.exports =
 
 	  /*
 	   * Must be called after beginWindowOpen, and not later than 1 second after
-	  @param {String} url
+	   * params: https://developer.mozilla.org/en-US/docs/Web/API/Window.open
 	   */
 
-	  PortalGun.prototype.windowOpen = function(url) {
-	    return this.windowOpenQueue.push(url);
+	  PortalGun.prototype.windowOpen = function() {
+	    var args;
+	    args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
+	    return this.windowOpenQueue.push(args);
 	  };
 
 	  PortalGun.prototype.validateParent = function() {
@@ -353,7 +364,6 @@ module.exports =
 	      }
 	    } catch (_error) {
 	      err = _error;
-	      console.log(err);
 	    }
 	  };
 

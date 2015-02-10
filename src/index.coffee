@@ -158,17 +158,20 @@ class PortalGun
   beforeWindowOpen: =>
     for ms in [0..1000] by 10
       setTimeout =>
-        for url in @windowOpenQueue
-          window.open url
+        for windowOpenArgs in @windowOpenQueue
+          window.open.apply null, windowOpenArgs
         @windowOpenQueue = []
       , ms
 
   ###
   # Must be called after beginWindowOpen, and not later than 1 second after
   @param {String} url
+  @param {String} strWindowName
+  @param {String} strWindowFeatures
   ###
-  windowOpen: (url) =>
-    @windowOpenQueue.push url
+  windowOpen: =>
+    console.log arguments
+    @windowOpenQueue.push arguments
 
   validateParent: =>
     @poster.postMessage 'ping'

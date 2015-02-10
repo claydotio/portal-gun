@@ -292,23 +292,54 @@ describe 'portal-gun', ->
 
   describe 'window opening', ->
     it 'doesnt open window if beforeWindowOpen is not called', (done) ->
+      oldOpen = window.open
       window.open = ->
         window.open = oldOpen
         done new Error 'not suppose to happen'
 
-      portal.windowOpen('test')
+      portal.windowOpen('http://test.com')
       setTimeout ->
         done()
       , 70
 
-    it 'opens window async', (done) ->
+    it 'opens window async with url', (done) ->
       portal.beforeWindowOpen()
 
       oldOpen = window.open
-      window.open = ->
+      window.open = (url) ->
         window.open = oldOpen
+        url.should.be 'http://test.com'
         done()
 
       setTimeout ->
-        portal.windowOpen('test')
+        portal.windowOpen('http://test.com')
+      , 30
+
+    it 'opens window async with url, windowName', (done) ->
+      portal.beforeWindowOpen()
+
+      oldOpen = window.open
+      window.open = (url, windowName) ->
+        window.open = oldOpen
+        url.should.be 'http://test.com'
+        windowName.should.be '_system'
+        done()
+
+      setTimeout ->
+        portal.windowOpen('http://test.com', '_system')
+      , 30
+
+    it 'opens window async with url, windowName, strWindowFeatures', (done) ->
+      portal.beforeWindowOpen()
+
+      oldOpen = window.open
+      window.open = (url, windowName, strWindowFeatures) ->
+        window.open = oldOpen
+        url.should.be 'http://test.com'
+        windowName.should.be '_system'
+        strWindowFeatures.should.be 'menubar=yes'
+        done()
+
+      setTimeout ->
+        portal.windowOpen('http://test.com', '_system', 'menubar=yes')
       , 30

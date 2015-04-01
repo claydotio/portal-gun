@@ -28,7 +28,7 @@ should = require('clay-chai').should()
 packageConfig = require '../package.json'
 portal = rewire '../src/index'
 
-TRUSTED_DOMAIN = 'clay.io'
+TRUSTED_DOMAINS = ['clay.io', 'staging.wtf']
 
 postRoutes = {}
 
@@ -52,7 +52,8 @@ portal.__set__ 'window.parent.postMessage', (messageString, targetOrigin) ->
   e = document.createEvent 'Event'
   e.initEvent 'message', true, true
 
-  e.origin = postRoutes[message.method].origin or ('http://' + TRUSTED_DOMAIN)
+  e.origin = postRoutes[message.method].origin or
+             ('http://' + TRUSTED_DOMAINS[0])
   e.data = JSON.stringify _.defaults(
     {id: message.id, _portal: true}
     result
@@ -120,7 +121,7 @@ describe 'portal-gun', ->
 
   describe 'get()', ->
     before ->
-      portal.up trusted: TRUSTED_DOMAIN
+      portal.up trusted: TRUSTED_DOMAINS
 
     it 'posts to parent frame', ->
       routePost 'mirror',
@@ -144,7 +145,7 @@ describe 'portal-gun', ->
 
     it 'times out', ->
       portal.down()
-      portal.up trusted: TRUSTED_DOMAIN, timeout: 1
+      portal.up trusted: TRUSTED_DOMAINS, timeout: 1
       routePost 'infinite.loop', timeout: true
 
       portal.get 'infinite.loop'
@@ -152,18 +153,35 @@ describe 'portal-gun', ->
         throw new Error 'Missing error'
       ,(err) ->
         portal.down()
-        portal.up trusted: TRUSTED_DOMAIN, timeout: 1000
+        portal.up trusted: TRUSTED_DOMAINS, timeout: 1000
         err.message.should.be 'Message Timeout'
 
   describe 'domain verification', ->
     it 'Succeeds on valid domains', ->
-      portal.up trusted: TRUSTED_DOMAIN, subdomains: false
+      portal.up trusted: TRUSTED_DOMAINS, subdomains: false
 
       domains = [
-        "http://#{TRUSTED_DOMAIN}/"
-        "https://#{TRUSTED_DOMAIN}/"
-        "http://#{TRUSTED_DOMAIN}"
-        "https://#{TRUSTED_DOMAIN}"
+        "http://#{TRUSTED_DOMAINS[0]}/"
+        "https://#{TRUSTED_DOMAINS[0]}/"
+        "http://#{TRUSTED_DOMAINS[0]}"
+        "https://#{TRUSTED_DOMAINS[0]}"
+      ]
+
+      Promise.map domains, (domain) ->
+        routePost 'domain.test',
+          origin: domain
+          data:
+            result: {test: true}
+
+        portal.get 'domain.test'
+          .then (user) ->
+            user.test.should.be true
+
+    it 'Succeeds on valid domains - using single trusted domain', ->
+      portal.up trusted: TRUSTED_DOMAINS[0], subdomains: false
+
+      domains = [
+        "http://#{TRUSTED_DOMAINS[0]}/"
       ]
 
       Promise.map domains, (domain) ->
@@ -177,18 +195,18 @@ describe 'portal-gun', ->
             user.test.should.be true
 
     it 'Succeeds on valid subdomains', ->
-      portal.up trusted: TRUSTED_DOMAIN, subdomains: true
+      portal.up trusted: TRUSTED_DOMAINS, subdomains: true
 
       domains = [
-        "http://sub.#{TRUSTED_DOMAIN}/"
-        "https://sub.#{TRUSTED_DOMAIN}/"
-        "http://sub.#{TRUSTED_DOMAIN}"
-        "https://sub.#{TRUSTED_DOMAIN}"
+        "http://sub.#{TRUSTED_DOMAINS[0]}/"
+        "https://sub.#{TRUSTED_DOMAINS[0]}/"
+        "http://sub.#{TRUSTED_DOMAINS[0]}"
+        "https://sub.#{TRUSTED_DOMAINS[0]}"
 
-        "http://sub.sub.#{TRUSTED_DOMAIN}/"
-        "https://sub.sub.#{TRUSTED_DOMAIN}/"
-        "http://sub.sub.#{TRUSTED_DOMAIN}"
-        "https://sub.sub.#{TRUSTED_DOMAIN}"
+        "http://sub.sub.#{TRUSTED_DOMAINS[0]}/"
+        "https://sub.sub.#{TRUSTED_DOMAINS[0]}/"
+        "http://sub.sub.#{TRUSTED_DOMAINS[0]}"
+        "https://sub.sub.#{TRUSTED_DOMAINS[0]}"
       ]
 
       Promise.map domains, (domain) ->
@@ -202,15 +220,15 @@ describe 'portal-gun', ->
           user.test.should.be true
 
     it 'Errors on invalid domains', ->
-      portal.up trusted: TRUSTED_DOMAIN, subdomains: false
+      portal.up trusted: TRUSTED_DOMAINS, subdomains: false
 
       domains = [
         'http://evil.io/'
         'http://sub.evil.io/'
         'http://sub.sub.evil.io/'
-        "http://evil.io/http://#{TRUSTED_DOMAIN}/"
+        "http://evil.io/http://#{TRUSTED_DOMAINS[0]}/"
 
-        "http://sub.#{TRUSTED_DOMAIN}/"
+        "http://sub.#{TRUSTED_DOMAINS[0]}/"
       ]
 
       Promise.map domains, (domain, i) ->

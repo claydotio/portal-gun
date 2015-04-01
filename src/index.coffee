@@ -105,12 +105,14 @@ class PortalGun
   # Bind global message event listener
 
   @param {Object} config
-  @param {String} config.trusted - trusted domain name e.g. 'clay.io'
+  @param {String|Array<String>} config.trusted - trusted domains e.g.['clay.io']
   @param {Boolean} config.subdomains - trust subdomains of trusted domain
   @param {Number} config.timeout - global message timeout
   ###
   up: ({trusted, subdomains, timeout} = {}) =>
     if trusted isnt undefined
+      if Object::toString.call(trusted) isnt '[object Array]'
+        trusted = [trusted]
       @config.trusted = trusted
     if subdomains?
       @config.subdomains = subdomains
@@ -183,13 +185,14 @@ class PortalGun
     unless @config?.trusted
       return true
 
-    regex = if @config.subdomains then \
-       new RegExp '^https?://(\\w+\\.)?(\\w+\\.)?' +
-                         "#{@config.trusted.replace(/\./g, '\\.')}/?$"
-    else new RegExp '^https?://' +
-                         "#{@config.trusted.replace(/\./g, '\\.')}/?$"
+    return _.some @config.trusted, (trusted) =>
+      regex = if @config.subdomains then \
+         new RegExp '^https?://(\\w+\\.)?(\\w+\\.)?' +
+                           "#{trusted.replace(/\./g, '\\.')}/?$"
+      else new RegExp '^https?://' +
+                           "#{trusted.replace(/\./g, '\\.')}/?$"
 
-    return regex.test origin
+      return regex.test origin
 
   onMessage: (e) =>
     try

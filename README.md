@@ -13,7 +13,7 @@ $ npm install portal-gun
 `portal = require('portal-gun')`  
 `portal.up`  
 `portal.down`  
-`portal.get`  
+`portal.call`  
 `portal.register`  
 
 ```coffee
@@ -33,12 +33,13 @@ up: (config) =>
 down: =>
 ```
 
+(alias `get` - deprecated)
 ```coffee
 ###
 @param {String} method
 @param {Array} [params]
 ###
-get: (method, params = []) =>
+call: (method, params = []) =>
 ```
 
 ```coffee

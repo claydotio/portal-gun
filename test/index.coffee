@@ -119,7 +119,7 @@ describe 'portal-gun', ->
 
       portal.down()
 
-  describe 'get()', ->
+  describe 'call()', ->
     before ->
       portal.up trusted: TRUSTED_DOMAINS
 
@@ -128,7 +128,7 @@ describe 'portal-gun', ->
         data:
           result: {test: true}
 
-      portal.get 'mirror'
+      portal.call 'mirror'
       .then (user) ->
         user.test.should.be true
 
@@ -137,7 +137,7 @@ describe 'portal-gun', ->
         data:
           error: {message: 'abc'}
 
-      portal.get 'mirror'
+      portal.call 'mirror'
       .then ->
         throw new Error 'Missing error'
       ,(err) ->
@@ -148,7 +148,7 @@ describe 'portal-gun', ->
       portal.up trusted: TRUSTED_DOMAINS, timeout: 1
       routePost 'infinite.loop', timeout: true
 
-      portal.get 'infinite.loop'
+      portal.call 'infinite.loop'
       .then ->
         throw new Error 'Missing error'
       ,(err) ->
@@ -173,7 +173,7 @@ describe 'portal-gun', ->
           data:
             result: {test: true}
 
-        portal.get 'domain.test'
+        portal.call 'domain.test'
           .then (user) ->
             user.test.should.be true
 
@@ -190,7 +190,7 @@ describe 'portal-gun', ->
           data:
             result: {test: true}
 
-        portal.get 'domain.test'
+        portal.call 'domain.test'
           .then (user) ->
             user.test.should.be true
 
@@ -215,7 +215,7 @@ describe 'portal-gun', ->
           data:
             result: {test: true}
 
-        portal.get 'domain.test'
+        portal.call 'domain.test'
         .then (user) ->
           user.test.should.be true
 
@@ -237,7 +237,7 @@ describe 'portal-gun', ->
           data:
             result: {test: true}
 
-        portal.get "domain.test.#{i}"
+        portal.call "domain.test.#{i}"
         .then (res) ->
           throw new Error 'Missing error'
         , (err) ->

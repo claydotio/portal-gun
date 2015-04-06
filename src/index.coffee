@@ -129,7 +129,7 @@ class PortalGun
   @param {String} method
   @param {Array} [params]
   ###
-  get: (method, params = []) =>
+  call: (method, params = []) =>
 
     # params should always be an array
     unless Object::toString.call(params) is '[object Array]'
@@ -206,7 +206,7 @@ class PortalGun
       if isRequest
         {id, method, params} = message
 
-        @get method, params
+        @call method, params
         .then (result) ->
           message = {id, result, _portal: true, jsonrpc: '2.0'}
           e.source.postMessage JSON.stringify(message), '*'
@@ -253,7 +253,8 @@ portal = new PortalGun()
 module.exports = {
   up: portal.up
   down: portal.down
-  get: portal.get
+  get: portal.call # LEGACY: alias -> call
+  call: portal.call
   register: portal.register
   beforeWindowOpen: portal.beforeWindowOpen
   windowOpen: portal.windowOpen

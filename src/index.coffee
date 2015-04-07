@@ -80,7 +80,7 @@ class Poster
   ###
   resolveMessage: (message) =>
     if not @pendingMessages[message.id]
-      return Promise.reject 'Method not found'
+      return Promise.reject new Error 'Method not found'
 
     else if message.error
       @pendingMessages[message.id].reject new Error message.error.message

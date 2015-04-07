@@ -161,13 +161,13 @@ module.exports =
 
 	PortalGun = (function() {
 	  function PortalGun() {
-	    this.register = __bind(this.register, this);
+	    this.on = __bind(this.on, this);
 	    this.onMessage = __bind(this.onMessage, this);
 	    this.isValidOrigin = __bind(this.isValidOrigin, this);
 	    this.validateParent = __bind(this.validateParent, this);
 	    this.windowOpen = __bind(this.windowOpen, this);
 	    this.beforeWindowOpen = __bind(this.beforeWindowOpen, this);
-	    this.get = __bind(this.get, this);
+	    this.call = __bind(this.call, this);
 	    this.down = __bind(this.down, this);
 	    this.up = __bind(this.up, this);
 	    this.config = {
@@ -191,7 +191,7 @@ module.exports =
 	   * Bind global message event listener
 	  
 	  @param {Object} config
-	  @param {String} config.trusted - trusted domain name e.g. 'clay.io'
+	  @param {String|Array<String>} config.trusted - trusted domains e.g.['clay.io']
 	  @param {Boolean} config.subdomains - trust subdomains of trusted domain
 	  @param {Number} config.timeout - global message timeout
 	   */
@@ -200,6 +200,9 @@ module.exports =
 	    var subdomains, timeout, trusted, _ref;
 	    _ref = _arg != null ? _arg : {}, trusted = _ref.trusted, subdomains = _ref.subdomains, timeout = _ref.timeout;
 	    if (trusted !== void 0) {
+	      if (Object.prototype.toString.call(trusted) !== '[object Array]') {
+	        trusted = [trusted];
+	      }
 	      this.config.trusted = trusted;
 	    }
 	    if (subdomains != null) {
@@ -222,7 +225,7 @@ module.exports =
 	  @param {Array} [params]
 	   */
 
-	  PortalGun.prototype.get = function(method, params) {
+	  PortalGun.prototype.call = function(method, params) {
 	    var frameError, localMethod;
 	    if (params == null) {
 	      params = [];
@@ -306,12 +309,17 @@ module.exports =
 	  };
 
 	  PortalGun.prototype.isValidOrigin = function(origin) {
-	    var regex, _ref;
+	    var _ref;
 	    if (!((_ref = this.config) != null ? _ref.trusted : void 0)) {
 	      return true;
 	    }
-	    regex = this.config.subdomains ? new RegExp('^https?://(\\w+\\.)?(\\w+\\.)?' + ("" + (this.config.trusted.replace(/\./g, '\\.')) + "/?$")) : new RegExp('^https?://' + ("" + (this.config.trusted.replace(/\./g, '\\.')) + "/?$"));
-	    return regex.test(origin);
+	    return _.some(this.config.trusted, (function(_this) {
+	      return function(trusted) {
+	        var regex;
+	        regex = _this.config.subdomains ? new RegExp('^https?://(\\w+\\.)?(\\w+\\.)?' + ("" + (trusted.replace(/\./g, '\\.')) + "/?$")) : new RegExp('^https?://' + ("" + (trusted.replace(/\./g, '\\.')) + "/?$"));
+	        return regex.test(origin);
+	      };
+	    })(this));
 	  };
 
 	  PortalGun.prototype.onMessage = function(e) {
@@ -324,7 +332,7 @@ module.exports =
 	      isRequest = !!message.method;
 	      if (isRequest) {
 	        id = message.id, method = message.method, params = message.params;
-	        return this.get(method, params).then(function(result) {
+	        return this.call(method, params).then(function(result) {
 	          message = {
 	            id: id,
 	            result: result,
@@ -375,7 +383,7 @@ module.exports =
 	  @param {Function} fn
 	   */
 
-	  PortalGun.prototype.register = function(method, fn) {
+	  PortalGun.prototype.on = function(method, fn) {
 	    return this.registeredMethods[method] = fn;
 	  };
 
@@ -388,8 +396,10 @@ module.exports =
 	module.exports = {
 	  up: portal.up,
 	  down: portal.down,
-	  get: portal.get,
-	  register: portal.register,
+	  get: portal.call,
+	  call: portal.call,
+	  on: portal.on,
+	  register: portal.on,
 	  beforeWindowOpen: portal.beforeWindowOpen,
 	  windowOpen: portal.windowOpen
 	};

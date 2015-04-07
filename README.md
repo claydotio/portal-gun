@@ -14,7 +14,7 @@ $ npm install portal-gun
 `portal.up`  
 `portal.down`  
 `portal.call`  
-`portal.register`  
+`portal.on`  
 
 ```coffee
 ###
@@ -42,6 +42,7 @@ down: =>
 call: (method, params = []) =>
 ```
 
+(alias `register` - deprecated)
 ```coffee
 ###
 # Register method to be called on child request, or local request fallback
@@ -49,7 +50,7 @@ call: (method, params = []) =>
 @param {String} method
 @param {Function} fn
 ###
-register: (method, fn) =>
+on: (method, fn) =>
 ```
 
 ```coffee

@@ -283,9 +283,9 @@ describe 'portal-gun', ->
           data:
             result: 'pong'
 
-    describe 'register', ->
+    describe 'on', ->
       it 'registers basic functions', ->
-        portal.register 'abc', ->
+        portal.on 'abc', ->
           return 'def'
 
         dispatchEvent {method: 'abc'}
@@ -293,7 +293,7 @@ describe 'portal-gun', ->
           res.should.be 'def'
 
       it 'registers basic functions with parameters', ->
-        portal.register 'add', (a, b) ->
+        portal.on 'add', (a, b) ->
           return a + b
 
         dispatchEvent {method: 'add', params: [1, 2]}
@@ -301,7 +301,7 @@ describe 'portal-gun', ->
           res.should.be 3
 
       it 'registers promise returning functions', ->
-        portal.register 'def', ->
+        portal.on 'def', ->
           Promise.resolve 'abc'
 
         dispatchEvent {method: 'def'}

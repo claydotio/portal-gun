@@ -245,7 +245,7 @@ class PortalGun
   @param {String} method
   @param {Function} fn
   ###
-  register: (method, fn) =>
+  on: (method, fn) =>
     @registeredMethods[method] = fn
 
 
@@ -255,7 +255,8 @@ module.exports = {
   down: portal.down
   get: portal.call # LEGACY: alias -> call
   call: portal.call
-  register: portal.register
+  on: portal.on
+  register: portal.on # LEGACY: alias -> on
   beforeWindowOpen: portal.beforeWindowOpen
   windowOpen: portal.windowOpen
 }

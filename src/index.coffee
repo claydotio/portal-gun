@@ -1,9 +1,9 @@
-# TODO: Callbacks
 Promise = window.Promise or require 'promiz'
 
 IS_FRAMED = window.self isnt window.top
-# window.open click timeout max is 1s, so timeout before then
-REQUEST_TIMEOUT_MS = 950
+
+# If a promise response is not recieved within this time, fail the request
+REQUEST_TIMEOUT_MS = 10
 
 deferredFactory = ->
   resolve = null
@@ -13,8 +13,25 @@ deferredFactory = ->
     reject = _reject
   promise.resolve = resolve
   promise.reject = reject
+  promise.acknowledged = false
 
   return promise
+
+isValidOrigin = (origin, trusted, allowSubdomains) ->
+  unless trusted?
+    return true
+
+  for trust in trusted
+    regex = if allowSubdomains then \
+       new RegExp '^https?://(\\w+\\.)?(\\w+\\.)?' +
+                         "#{trust.replace(/\./g, '\\.')}/?$"
+    else new RegExp '^https?://' +
+                         "#{trust.replace(/\./g, '\\.')}/?$"
+
+    if regex.test origin
+      return true
+
+  return false
 
 ###
 # Messages follow the json-rpc 2.0 spec: http://www.jsonrpc.org/specification
@@ -24,7 +41,7 @@ deferredFactory = ->
 @property {Integer} [id] - Without an `id` this is a notification
 @property {String} method
 @property {Array<*>} params
-@property {Boolean} _clay - Must be true
+@property {Boolean} _portal - Must be true
 @property {String} jsonrpc - Must be '2.0'
 
 @typedef {Object} RPCResponse
@@ -43,8 +60,6 @@ class Poster
     @lastMessageId = 0
     @pendingMessages = {}
 
-  setTimeout: (@timeout) => null
-
   ###
   @param {String} method
   @param {Array} [params]
@@ -56,9 +71,8 @@ class Poster
 
     try
       @lastMessageId += 1
-      id = @lastMessageId
 
-      message.id = id
+      message.id = "#{@lastMessageId}"
       message._portal = true
       message.jsonrpc = '2.0'
 
@@ -70,7 +84,8 @@ class Poster
       deferred.reject err
 
     window.setTimeout ->
-      deferred.reject new Error 'Message Timeout'
+      unless deferred.acknowledged
+        deferred.reject new Error 'Message Timeout'
     , @timeout
 
     return deferred
@@ -85,6 +100,9 @@ class Poster
     else if message.error
       @pendingMessages[message.id].reject new Error message.error.message
 
+    else if message.acknowledge
+      @pendingMessages[message.id].acknowledged = true
+
     else
       @pendingMessages[message.id].resolve message.result or null
 
@@ -93,10 +111,8 @@ class PortalGun
   constructor: ->
     @config =
       trusted: null
-      subdomains: false
-      timeout: REQUEST_TIMEOUT_MS
-    @windowOpenQueue = []
-    @poster = new Poster timeout: @config.timeout
+      allowSubdomains: false
+    @poster = new Poster timeout: REQUEST_TIMEOUT_MS
     @registeredMethods = {
       ping: -> 'pong'
     }
@@ -105,20 +121,14 @@ class PortalGun
   # Bind global message event listener
 
   @param {Object} config
-  @param {String|Array<String>} config.trusted - trusted domains e.g.['clay.io']
-  @param {Boolean} config.subdomains - trust subdomains of trusted domain
-  @param {Number} config.timeout - global message timeout
+  @param {Array<String>} config.trusted - trusted domains e.g.['clay.io']
+  @param {Boolean} config.allowSubdomains - trust subdomains of trusted domain
   ###
-  up: ({trusted, subdomains, timeout} = {}) =>
-    if trusted isnt undefined
-      if Object::toString.call(trusted) isnt '[object Array]'
-        trusted = [trusted]
+  up: ({trusted, allowSubdomains} = {}) =>
+    if trusted?
       @config.trusted = trusted
-    if subdomains?
-      @config.subdomains = subdomains
-    if timeout?
-      @config.timeout = timeout
-    @poster.setTimeout @config.timeout
+    if allowSubdomains?
+      @config.allowSubdomains = allowSubdomains
     window.addEventListener 'message', @onMessage
 
   # Remove global message event listener
@@ -127,7 +137,7 @@ class PortalGun
 
   ###
   @param {String} method
-  @param {Array} [params]
+  @param {*} params - Arrays will be deconstructed as multiple args
   ###
   call: (method, params = []) =>
 
@@ -136,7 +146,9 @@ class PortalGun
       params = [params]
 
     localMethod = (method, params) =>
-      fn = @registeredMethods[method] or -> throw new Error 'Method not found'
+      fn = @registeredMethods[method]
+      unless fn
+        throw new Error 'Method not found'
       return fn.apply null, params
 
     if IS_FRAMED
@@ -156,43 +168,8 @@ class PortalGun
       new Promise (resolve) ->
         resolve localMethod(method, params)
 
-  # Must be called in the same tick as an interaction event
-  beforeWindowOpen: =>
-    sent = false
-    @windowOpenQueue = []
-    for ms in [0..1000] by 10
-      setTimeout =>
-        if sent
-          return
-        if @windowOpenQueue.length > 0
-          sent = true
-        for args in @windowOpenQueue
-          window.open.apply window, args
-        @windowOpenQueue = []
-      , ms
-
-  ###
-  # Must be called after beginWindowOpen, and not later than 1 second after
-  # params: https://developer.mozilla.org/en-US/docs/Web/API/Window.open
-  ###
-  windowOpen: (args...) =>
-    @windowOpenQueue.push args
-
   validateParent: =>
     @poster.postMessage 'ping'
-
-  isValidOrigin: (origin) =>
-    unless @config?.trusted
-      return true
-
-    return _.some @config.trusted, (trusted) =>
-      regex = if @config.subdomains then \
-         new RegExp '^https?://(\\w+\\.)?(\\w+\\.)?' +
-                           "#{trusted.replace(/\./g, '\\.')}/?$"
-      else new RegExp '^https?://' +
-                           "#{trusted.replace(/\./g, '\\.')}/?$"
-
-      return regex.test origin
 
   onMessage: (e) =>
     try
@@ -201,18 +178,28 @@ class PortalGun
       if not message._portal
         throw new Error 'Non-portal message'
 
-      isRequest = !!message.method
+      isRequest = Boolean message.method
 
       if isRequest
         {id, method, params} = message
 
+        # acknowledge request, prevent request timeout
+        e.source.postMessage JSON.stringify({
+          _portal: true
+          jsonrpc: '2.0'
+          id
+          acknowledge: true
+        }), '*'
+
         @call method, params
         .then (result) ->
-          message = {id, result, _portal: true, jsonrpc: '2.0'}
-          e.source.postMessage JSON.stringify(message), '*'
-
+          e.source.postMessage JSON.stringify({
+            _portal: true
+            jsonrpc: '2.0'
+            id
+            result
+          }), '*'
         .catch (err) ->
-
           # json-rpc 2.0 error codes
           code = switch err.message
             when 'Method not found'
@@ -220,21 +207,27 @@ class PortalGun
             else
               -1
 
-          message =
+          e.source.postMessage JSON.stringify({
             _portal: true
             jsonrpc: '2.0'
             id: id
             error:
               code: code
               message: err.message
-
-          e.source.postMessage JSON.stringify(message), '*'
+          }), '*'
 
       else
-        unless @isValidOrigin e.origin
-          message.error = {message: "Invalid origin #{e.origin}", code: -1}
-
-        @poster.resolveMessage message
+        if isValidOrigin e.origin, @config.trusted, @config.allowSubdomains
+          @poster.resolveMessage message
+        else
+          @poster.resolveMessage {
+            _portal: true
+            jsonrpc: '2.0'
+            id: message.id
+            error:
+              code: -1
+              message: "Invalid origin #{e.origin}"
+          }
 
     catch err
       return
@@ -253,10 +246,6 @@ portal = new PortalGun()
 module.exports = {
   up: portal.up
   down: portal.down
-  get: portal.call # LEGACY: alias -> call
   call: portal.call
   on: portal.on
-  register: portal.on # LEGACY: alias -> on
-  beforeWindowOpen: portal.beforeWindowOpen
-  windowOpen: portal.windowOpen
 }

@@ -35,7 +35,7 @@ postRoutes = {}
 portal.__set__ 'window.parent.postMessage', (messageString, targetOrigin) ->
   targetOrigin.should.be '*'
   message = JSON.parse messageString
-  _.isNumber(message.id).should.be true
+  _.isString(message.id).should.be true
   message._portal.should.be true
   message.jsonrpc.should.be '2.0'
 
@@ -70,18 +70,20 @@ dispatchEvent = (data) ->
       postMessage: (messageString, targetOrigin) ->
         targetOrigin.should.be '*'
         message = JSON.parse messageString
-        message.id.should.be 1
+        message.id.should.be '1'
         message._portal.should.be true
         message.jsonrpc.should.be '2.0'
 
         if message.error
           reject message.error
+        if message.acknowledge
+          return
         else
           resolve message.result
 
     e.origin = 'http://anysite.com'
     e.data = JSON.stringify _.defaults(
-      {id: 1, _portal: true}
+      {id: '1', _portal: true}
       data
     )
 
@@ -145,20 +147,20 @@ describe 'portal-gun', ->
 
     it 'times out', ->
       portal.down()
-      portal.up trusted: TRUSTED_DOMAINS, timeout: 1
+      portal.up trusted: TRUSTED_DOMAINS
       routePost 'infinite.loop', timeout: true
 
       portal.call 'infinite.loop'
       .then ->
         throw new Error 'Missing error'
-      ,(err) ->
+      , (err) ->
         portal.down()
         portal.up trusted: TRUSTED_DOMAINS, timeout: 1000
         err.message.should.be 'Message Timeout'
 
   describe 'domain verification', ->
     it 'Succeeds on valid domains', ->
-      portal.up trusted: TRUSTED_DOMAINS, subdomains: false
+      portal.up trusted: TRUSTED_DOMAINS, allowSubdomains: false
 
       domains = [
         "http://#{TRUSTED_DOMAINS[0]}/"
@@ -177,25 +179,8 @@ describe 'portal-gun', ->
           .then (user) ->
             user.test.should.be true
 
-    it 'Succeeds on valid domains - using single trusted domain', ->
-      portal.up trusted: TRUSTED_DOMAINS[0], subdomains: false
-
-      domains = [
-        "http://#{TRUSTED_DOMAINS[0]}/"
-      ]
-
-      Promise.map domains, (domain) ->
-        routePost 'domain.test',
-          origin: domain
-          data:
-            result: {test: true}
-
-        portal.call 'domain.test'
-          .then (user) ->
-            user.test.should.be true
-
     it 'Succeeds on valid subdomains', ->
-      portal.up trusted: TRUSTED_DOMAINS, subdomains: true
+      portal.up trusted: TRUSTED_DOMAINS, allowSubdomains: true
 
       domains = [
         "http://sub.#{TRUSTED_DOMAINS[0]}/"
@@ -220,7 +205,7 @@ describe 'portal-gun', ->
           user.test.should.be true
 
     it 'Errors on invalid domains', ->
-      portal.up trusted: TRUSTED_DOMAINS, subdomains: false
+      portal.up trusted: TRUSTED_DOMAINS, allowSubdomains: false
 
       domains = [
         'http://evil.io/'
@@ -308,60 +293,13 @@ describe 'portal-gun', ->
         .then (res) ->
           res.should.be 'abc'
 
-  describe 'window opening', ->
-    it 'doesnt open window if beforeWindowOpen is not called', (done) ->
-      window.open = ->
-        window.open = oldOpen
-        done new Error 'not suppose to happen'
+      it 'supports long-running requests', ->
+        portal.on 'long', ->
+          return new Promise (resolve) ->
+            setTimeout ->
+              resolve 'finally!'
+            , 90
 
-      portal.windowOpen('test')
-      setTimeout ->
-        done()
-      , 70
-
-    it 'opens window async', (done) ->
-      portal.beforeWindowOpen()
-
-      oldOpen = window.open
-      window.open = ->
-        window.open = oldOpen
-        done()
-
-      setTimeout ->
-        portal.windowOpen('test')
-      , 30
-
-    it 'only opens once', (done) ->
-      portal.beforeWindowOpen()
-      callCnt = 0
-
-      oldOpen = window.open
-      window.open = ->
-        callCnt += 1
-
-      setTimeout ->
-        portal.windowOpen('test')
-        setTimeout ->
-          portal.windowOpen('test')
-          setTimeout ->
-            window.open = oldOpen
-            callCnt.should.be 1
-            done()
-          , 30
-        , 30
-      , 30
-
-    it 'opens window async with args', (done) ->
-      portal.beforeWindowOpen()
-
-      oldOpen = window.open
-      window.open = (url, windowName, strWindowFeatures) ->
-        window.open = oldOpen
-        url.should.be 'http://test.com'
-        windowName.should.be '_system'
-        strWindowFeatures.should.be 'menubar=yes'
-        done()
-
-      setTimeout ->
-        portal.windowOpen('http://test.com', '_system', 'menubar=yes')
-      , 30
+        dispatchEvent {method: 'long'}
+        .then (res) ->
+          res.should.be 'finally!'

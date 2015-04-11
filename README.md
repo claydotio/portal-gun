@@ -21,9 +21,8 @@ $ npm install portal-gun
 # Bind global message event listener
 
 @param {Object} [config]
-@param {String|Array<String>} config.trusted - trusted domains e.g.['clay.io']
-@param {Boolean} config.subdomains - trust subdomains of trusted domain
-@param {Number} config.timeout - global message timeout
+@param {Array<String>} config.trusted - trusted domains e.g.['clay.io']
+@param {Boolean} config.allowSubdomains - trust subdomains of trusted domain
 ###
 up: (config) =>
 ```
@@ -53,17 +52,6 @@ call: (method, params = []) =>
 on: (method, fn) =>
 ```
 
-```coffee
-# Must be called in the same tick as an interaction event
-beforeWindowOpen: =>
-
-###
-# Must be called after beginWindowOpen, and not later than 1 second after
-# params: https://developer.mozilla.org/en-US/docs/Web/API/Window.open
-###
-windowOpen: (url, windowName, strWindowFeatures) =>
-```
-
 ## Contributing
 
 ##### Install pre-commit hook
@@ -74,3 +62,12 @@ windowOpen: (url, windowName, strWindowFeatures) =>
 npm install
 npm test
 ```
+
+## Changelog
+
+v0.1.3 - 0.2.0
+
+  - removed `beforeWindowOpen` and `windowOpen`
+  - `trusted` domains must be an array
+  - removed `timeout` config
+  - `subdomains` config renamed to `allowSubdomains`

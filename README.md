@@ -59,10 +59,12 @@ npm test
 
 ## Changelog
 
-v0.1.3 -> v0.2.0
+v0.1.x -> v0.2.0
 
   - added callback support (currently one-way)
   - removed `beforeWindowOpen` and `windowOpen`
   - `trusted` domains must be an array
   - removed `timeout` config
   - `subdomains` config renamed to `allowSubdomains`
+  - renamed `register()` -> `on()`
+  - renamed `get()` -> `call()`

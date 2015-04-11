@@ -45,7 +45,7 @@ module.exports =
 /* 0 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var IS_FRAMED, PortalGun, Poster, Promise, REQUEST_TIMEOUT_MS, deferredFactory, portal,
+	var IS_FRAMED, PortalGun, Poster, Promise, REQUEST_TIMEOUT_MS, deferredFactory, isValidOrigin, portal,
 	  __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; },
 	  __slice = [].slice;
 
@@ -53,7 +53,7 @@ module.exports =
 
 	IS_FRAMED = window.self !== window.top;
 
-	REQUEST_TIMEOUT_MS = 950;
+	REQUEST_TIMEOUT_MS = 10;
 
 	deferredFactory = function() {
 	  var promise, reject, resolve;
@@ -68,22 +68,58 @@ module.exports =
 	  return promise;
 	};
 
+	isValidOrigin = function(origin, trusted, allowSubdomains) {
+	  var regex, trust, _i, _len;
+	  if (trusted == null) {
+	    return true;
+	  }
+	  for (_i = 0, _len = trusted.length; _i < _len; _i++) {
+	    trust = trusted[_i];
+	    regex = allowSubdomains ? new RegExp('^https?://(\\w+\\.)?(\\w+\\.)?' + ("" + (trust.replace(/\./g, '\\.')) + "/?$")) : new RegExp('^https?://' + ("" + (trust.replace(/\./g, '\\.')) + "/?$"));
+	    if (regex.test(origin)) {
+	      return true;
+	    }
+	  }
+	  return false;
+	};
+
 
 	/*
 	 * Messages follow the json-rpc 2.0 spec: http://www.jsonrpc.org/specification
 	 * _portal is added to denote a portal-gun message
+	 * RPCAcknowledgeRequest is added to ensure the responder recieved the request
+	 * RPCCallbackResponse is added to support callbacks for methods
+
+
+	 * params, if containing a callback function, will have that method replaced
+	 * with: {_portalGunCallback: true, callbackId: {Number}}
+	 * which should be used to emit callback responses
 
 	@typedef {Object} RPCRequest
 	@property {Integer} [id] - Without an `id` this is a notification
 	@property {String} method
 	@property {Array<*>} params
-	@property {Boolean} _clay - Must be true
+	@property {Boolean} _portal - Must be true
 	@property {String} jsonrpc - Must be '2.0'
+
+
+	@typedef {Object} RPCAcknowledgeRequest
+	@property {Integer} id
+	@property {Boolean} acknowledge - pre-result response to notify requester
+	@property {Boolean} _portal - Must be true
+	@property {String} jsonrpc - Must be '2.0'
+
 
 	@typedef {Object} RPCResponse
 	@property {Integer} [id]
 	@property {*} result
 	@property {RPCError} error
+
+
+	@typedef {Object} RPCCallbackResponse
+	@property {Integer} callbackId
+	@property {Array} params
+
 
 	@typedef {Object} RPCError
 	@property {Integer} code
@@ -95,15 +131,11 @@ module.exports =
 	    this.timeout = timeout;
 	    this.resolveMessage = __bind(this.resolveMessage, this);
 	    this.postMessage = __bind(this.postMessage, this);
-	    this.setTimeout = __bind(this.setTimeout, this);
 	    this.lastMessageId = 0;
+	    this.lastCallbackId = 0;
 	    this.pendingMessages = {};
+	    this.callbacks = {};
 	  }
-
-	  Poster.prototype.setTimeout = function(timeout) {
-	    this.timeout = timeout;
-	    return null;
-	  };
 
 
 	  /*
@@ -112,46 +144,75 @@ module.exports =
 	  @returns {Promise}
 	   */
 
-	  Poster.prototype.postMessage = function(method, params) {
-	    var deferred, err, id, message;
-	    if (params == null) {
-	      params = [];
+	  Poster.prototype.postMessage = function(method, reqParams) {
+	    var deferred, err, id, message, param, params, _i, _len;
+	    if (reqParams == null) {
+	      reqParams = [];
 	    }
 	    deferred = deferredFactory();
+	    params = [];
+	    for (_i = 0, _len = reqParams.length; _i < _len; _i++) {
+	      param = reqParams[_i];
+	      if (typeof param === 'function') {
+	        this.lastCallbackId += 1;
+	        id = this.lastCallbackId;
+	        this.callbacks[id] = param;
+	        params.push({
+	          _portalGunCallback: true,
+	          callbackId: id
+	        });
+	      } else {
+	        params.push(param);
+	      }
+	    }
 	    message = {
 	      method: method,
 	      params: params
 	    };
 	    try {
 	      this.lastMessageId += 1;
-	      id = this.lastMessageId;
-	      message.id = id;
+	      message.id = "" + this.lastMessageId;
 	      message._portal = true;
 	      message.jsonrpc = '2.0';
-	      this.pendingMessages[message.id] = deferred;
+	      this.pendingMessages[message.id] = {
+	        reject: deferred.reject,
+	        resolve: deferred.resolve,
+	        acknowledged: false
+	      };
 	      window.parent.postMessage(JSON.stringify(message), '*');
 	    } catch (_error) {
 	      err = _error;
 	      deferred.reject(err);
 	    }
 	    window.setTimeout(function() {
-	      return deferred.reject(new Error('Message Timeout'));
+	      if (!deferred.acknowledged) {
+	        return deferred.reject(new Error('Message Timeout'));
+	      }
 	    }, this.timeout);
 	    return deferred;
 	  };
 
 
 	  /*
-	  @param {RPCResponse|RPCError}
+	  @param {RPCResponse|RPCCallbackResponse|RPCError}
 	   */
 
 	  Poster.prototype.resolveMessage = function(message) {
-	    if (!this.pendingMessages[message.id]) {
-	      return Promise.reject('Method not found');
-	    } else if (message.error) {
-	      return this.pendingMessages[message.id].reject(new Error(message.error.message));
+	    if (message.callbackId) {
+	      if (!this.callbacks[message.callbackId]) {
+	        return Promise.reject(new Error('Method not found'));
+	      }
+	      return this.callbacks[message.callbackId].apply(null, message.params);
 	    } else {
-	      return this.pendingMessages[message.id].resolve(message.result || null);
+	      if (!this.pendingMessages[message.id]) {
+	        return Promise.reject(new Error('Method not found'));
+	      } else if (message.error) {
+	        return this.pendingMessages[message.id].reject(new Error(message.error.message));
+	      } else if (message.acknowledge) {
+	        return this.pendingMessages[message.id].acknowledged = true;
+	      } else {
+	        return this.pendingMessages[message.id].resolve(message.result || null);
+	      }
 	    }
 	  };
 
@@ -163,21 +224,16 @@ module.exports =
 	  function PortalGun() {
 	    this.on = __bind(this.on, this);
 	    this.onMessage = __bind(this.onMessage, this);
-	    this.isValidOrigin = __bind(this.isValidOrigin, this);
 	    this.validateParent = __bind(this.validateParent, this);
-	    this.windowOpen = __bind(this.windowOpen, this);
-	    this.beforeWindowOpen = __bind(this.beforeWindowOpen, this);
 	    this.call = __bind(this.call, this);
 	    this.down = __bind(this.down, this);
 	    this.up = __bind(this.up, this);
 	    this.config = {
 	      trusted: null,
-	      subdomains: false,
-	      timeout: REQUEST_TIMEOUT_MS
+	      allowSubdomains: false
 	    };
-	    this.windowOpenQueue = [];
 	    this.poster = new Poster({
-	      timeout: this.config.timeout
+	      timeout: REQUEST_TIMEOUT_MS
 	    });
 	    this.registeredMethods = {
 	      ping: function() {
@@ -191,27 +247,19 @@ module.exports =
 	   * Bind global message event listener
 	  
 	  @param {Object} config
-	  @param {String|Array<String>} config.trusted - trusted domains e.g.['clay.io']
-	  @param {Boolean} config.subdomains - trust subdomains of trusted domain
-	  @param {Number} config.timeout - global message timeout
+	  @param {Array<String>} config.trusted - trusted domains e.g.['clay.io']
+	  @param {Boolean} config.allowSubdomains - trust subdomains of trusted domain
 	   */
 
 	  PortalGun.prototype.up = function(_arg) {
-	    var subdomains, timeout, trusted, _ref;
-	    _ref = _arg != null ? _arg : {}, trusted = _ref.trusted, subdomains = _ref.subdomains, timeout = _ref.timeout;
-	    if (trusted !== void 0) {
-	      if (Object.prototype.toString.call(trusted) !== '[object Array]') {
-	        trusted = [trusted];
-	      }
+	    var allowSubdomains, trusted, _ref;
+	    _ref = _arg != null ? _arg : {}, trusted = _ref.trusted, allowSubdomains = _ref.allowSubdomains;
+	    if (trusted != null) {
 	      this.config.trusted = trusted;
 	    }
-	    if (subdomains != null) {
-	      this.config.subdomains = subdomains;
+	    if (allowSubdomains != null) {
+	      this.config.allowSubdomains = allowSubdomains;
 	    }
-	    if (timeout != null) {
-	      this.config.timeout = timeout;
-	    }
-	    this.poster.setTimeout(this.config.timeout);
 	    return window.addEventListener('message', this.onMessage);
 	  };
 
@@ -222,7 +270,7 @@ module.exports =
 
 	  /*
 	  @param {String} method
-	  @param {Array} [params]
+	  @param {*} params - Arrays will be deconstructed as multiple args
 	   */
 
 	  PortalGun.prototype.call = function(method, params) {
@@ -236,9 +284,10 @@ module.exports =
 	    localMethod = (function(_this) {
 	      return function(method, params) {
 	        var fn;
-	        fn = _this.registeredMethods[method] || function() {
+	        fn = _this.registeredMethods[method];
+	        if (!fn) {
 	          throw new Error('Method not found');
-	        };
+	        }
 	        return fn.apply(null, params);
 	      };
 	    })(this);
@@ -265,81 +314,52 @@ module.exports =
 	    }
 	  };
 
-	  PortalGun.prototype.beforeWindowOpen = function() {
-	    var ms, sent, _i, _results;
-	    sent = false;
-	    this.windowOpenQueue = [];
-	    _results = [];
-	    for (ms = _i = 0; _i <= 1000; ms = _i += 10) {
-	      _results.push(setTimeout((function(_this) {
-	        return function() {
-	          var args, _j, _len, _ref;
-	          if (sent) {
-	            return;
-	          }
-	          if (_this.windowOpenQueue.length > 0) {
-	            sent = true;
-	          }
-	          _ref = _this.windowOpenQueue;
-	          for (_j = 0, _len = _ref.length; _j < _len; _j++) {
-	            args = _ref[_j];
-	            window.open.apply(window, args);
-	          }
-	          return _this.windowOpenQueue = [];
-	        };
-	      })(this), ms));
-	    }
-	    return _results;
-	  };
-
-
-	  /*
-	   * Must be called after beginWindowOpen, and not later than 1 second after
-	   * params: https://developer.mozilla.org/en-US/docs/Web/API/Window.open
-	   */
-
-	  PortalGun.prototype.windowOpen = function() {
-	    var args;
-	    args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
-	    return this.windowOpenQueue.push(args);
-	  };
-
 	  PortalGun.prototype.validateParent = function() {
 	    return this.poster.postMessage('ping');
 	  };
 
-	  PortalGun.prototype.isValidOrigin = function(origin) {
-	    var _ref;
-	    if (!((_ref = this.config) != null ? _ref.trusted : void 0)) {
-	      return true;
-	    }
-	    return _.some(this.config.trusted, (function(_this) {
-	      return function(trusted) {
-	        var regex;
-	        regex = _this.config.subdomains ? new RegExp('^https?://(\\w+\\.)?(\\w+\\.)?' + ("" + (trusted.replace(/\./g, '\\.')) + "/?$")) : new RegExp('^https?://' + ("" + (trusted.replace(/\./g, '\\.')) + "/?$"));
-	        return regex.test(origin);
-	      };
-	    })(this));
-	  };
-
 	  PortalGun.prototype.onMessage = function(e) {
-	    var err, id, isRequest, message, method, params;
+	    var err, id, isRequest, message, method, param, params, reqParams, _i, _len;
 	    try {
 	      message = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
 	      if (!message._portal) {
 	        throw new Error('Non-portal message');
 	      }
-	      isRequest = !!message.method;
+	      isRequest = Boolean(message.method);
 	      if (isRequest) {
-	        id = message.id, method = message.method, params = message.params;
+	        params = [];
+	        id = message.id, method = message.method;
+	        reqParams = message.params || [];
+	        for (_i = 0, _len = reqParams.length; _i < _len; _i++) {
+	          param = reqParams[_i];
+	          if (param != null ? param._portalGunCallback : void 0) {
+	            params.push(function() {
+	              var params;
+	              params = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
+	              return e.source.postMessage(JSON.stringify({
+	                _portal: true,
+	                jsonrpc: '2.0',
+	                callbackId: param.callbackId,
+	                params: params
+	              }), '*');
+	            });
+	          } else {
+	            params.push(param);
+	          }
+	        }
+	        e.source.postMessage(JSON.stringify({
+	          _portal: true,
+	          jsonrpc: '2.0',
+	          id: id,
+	          acknowledge: true
+	        }), '*');
 	        return this.call(method, params).then(function(result) {
-	          message = {
-	            id: id,
-	            result: result,
+	          return e.source.postMessage(JSON.stringify({
 	            _portal: true,
-	            jsonrpc: '2.0'
-	          };
-	          return e.source.postMessage(JSON.stringify(message), '*');
+	            jsonrpc: '2.0',
+	            id: id,
+	            result: result
+	          }), '*');
 	        })["catch"](function(err) {
 	          var code;
 	          code = (function() {
@@ -350,7 +370,7 @@ module.exports =
 	                return -1;
 	            }
 	          })();
-	          message = {
+	          return e.source.postMessage(JSON.stringify({
 	            _portal: true,
 	            jsonrpc: '2.0',
 	            id: id,
@@ -358,17 +378,22 @@ module.exports =
 	              code: code,
 	              message: err.message
 	            }
-	          };
-	          return e.source.postMessage(JSON.stringify(message), '*');
+	          }), '*');
 	        });
 	      } else {
-	        if (!this.isValidOrigin(e.origin)) {
-	          message.error = {
-	            message: "Invalid origin " + e.origin,
-	            code: -1
-	          };
+	        if (isValidOrigin(e.origin, this.config.trusted, this.config.allowSubdomains)) {
+	          return this.poster.resolveMessage(message);
+	        } else {
+	          return this.poster.resolveMessage({
+	            _portal: true,
+	            jsonrpc: '2.0',
+	            id: message.id,
+	            error: {
+	              code: -1,
+	              message: "Invalid origin " + e.origin
+	            }
+	          });
 	        }
-	        return this.poster.resolveMessage(message);
 	      }
 	    } catch (_error) {
 	      err = _error;
@@ -396,12 +421,8 @@ module.exports =
 	module.exports = {
 	  up: portal.up,
 	  down: portal.down,
-	  get: portal.call,
 	  call: portal.call,
-	  on: portal.on,
-	  register: portal.on,
-	  beforeWindowOpen: portal.beforeWindowOpen,
-	  windowOpen: portal.windowOpen
+	  on: portal.on
 	};
 
 

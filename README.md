@@ -32,16 +32,14 @@ up: (config) =>
 down: =>
 ```
 
-(alias `get` - deprecated)
 ```coffee
 ###
 @param {String} method
-@param {Array} [params]
+@param {*} params - Arrays will be deconstructed as multiple args
 ###
 call: (method, params = []) =>
 ```
 
-(alias `register` - deprecated)
 ```coffee
 ###
 # Register method to be called on child request, or local request fallback
@@ -54,10 +52,6 @@ on: (method, fn) =>
 
 ## Contributing
 
-##### Install pre-commit hook
-
-`ln -s ../../pre-commit.sh .git/hooks/pre-commit`
-
 ```bash
 npm install
 npm test
@@ -65,8 +59,9 @@ npm test
 
 ## Changelog
 
-v0.1.3 - 0.2.0
+v0.1.3 -> v0.2.0
 
+  - added callback support (currently one-way)
   - removed `beforeWindowOpen` and `windowOpen`
   - `trusted` domains must be an array
   - removed `timeout` config

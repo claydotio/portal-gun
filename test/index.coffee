@@ -81,7 +81,7 @@ dispatchEvent = (data) ->
         else
           resolve message.result
 
-    e.origin = 'http://anysite.com'
+    e.origin = "http://#{TRUSTED_DOMAINS[0]}"
     e.data = JSON.stringify _.defaults(
       {id: '1', _portal: true}
       data
@@ -94,7 +94,6 @@ routePost = (method, {origin, data, timeout}) ->
 
 routePost 'ping', data: {result: 'pong'}
 
-# TODO callbacks
 describe 'portal-gun', ->
   describe 'up()/down()', ->
     it 'comes up', (done) ->
@@ -146,17 +145,58 @@ describe 'portal-gun', ->
         err.message.should.be 'abc'
 
     it 'times out', ->
-      portal.down()
-      portal.up trusted: TRUSTED_DOMAINS
       routePost 'infinite.loop', timeout: true
 
       portal.call 'infinite.loop'
       .then ->
         throw new Error 'Missing error'
       , (err) ->
-        portal.down()
-        portal.up trusted: TRUSTED_DOMAINS, timeout: 1000
         err.message.should.be 'Message Timeout'
+
+    it 'supports callbacks', (done) ->
+      routePost 'callme', {
+        data: (message) ->
+          message.params[0]._portalGunCallback.should.be true
+
+          setTimeout ->
+            dispatchEvent {
+              callbackId: message.params[0].callbackId
+              params: ['back']
+            }
+          , 10
+          return {result: 'noop'}
+      }
+
+      portal.call 'callme', (res) ->
+        res.should.be 'back'
+        done()
+      .then (res) ->
+        res.should.be 'noop'
+      .catch done
+
+
+    it 'supports callbacks with multiple params', (done) ->
+      routePost 'callmemany', {
+        data: (message) ->
+          message.params[0].should.be 'abc'
+          message.params[1]._portalGunCallback.should.be true
+
+          setTimeout ->
+            dispatchEvent {
+              callbackId: message.params[1].callbackId
+              params: ['abc']
+            }
+          , 10
+          return {result: 'noop'}
+      }
+
+      portal.call 'callmemany', ['abc', ((res) ->
+        res.should.be 'abc'
+        done()
+      )]
+      .then (res) ->
+        res.should.be 'noop'
+      .catch done
 
   describe 'domain verification', ->
     it 'Succeeds on valid domains', ->

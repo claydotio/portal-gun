@@ -13,7 +13,6 @@ deferredFactory = ->
     reject = _reject
   promise.resolve = resolve
   promise.reject = reject
-  promise.acknowledged = false
 
   return promise
 
@@ -36,6 +35,13 @@ isValidOrigin = (origin, trusted, allowSubdomains) ->
 ###
 # Messages follow the json-rpc 2.0 spec: http://www.jsonrpc.org/specification
 # _portal is added to denote a portal-gun message
+# RPCAcknowledgeRequest is added to ensure the responder recieved the request
+# RPCCallbackResponse is added to support callbacks for methods
+
+
+# params, if containing a callback function, will have that method replaced
+# with: {_portalGunCallback: true, callbackId: {Number}}
+# which should be used to emit callback responses
 
 @typedef {Object} RPCRequest
 @property {Integer} [id] - Without an `id` this is a notification
@@ -44,10 +50,24 @@ isValidOrigin = (origin, trusted, allowSubdomains) ->
 @property {Boolean} _portal - Must be true
 @property {String} jsonrpc - Must be '2.0'
 
+
+@typedef {Object} RPCAcknowledgeRequest
+@property {Integer} id
+@property {Boolean} acknowledge - pre-result response to notify requester
+@property {Boolean} _portal - Must be true
+@property {String} jsonrpc - Must be '2.0'
+
+
 @typedef {Object} RPCResponse
 @property {Integer} [id]
 @property {*} result
 @property {RPCError} error
+
+
+@typedef {Object} RPCCallbackResponse
+@property {Integer} callbackId
+@property {Array} params
+
 
 @typedef {Object} RPCError
 @property {Integer} code
@@ -58,15 +78,29 @@ isValidOrigin = (origin, trusted, allowSubdomains) ->
 class Poster
   constructor: (@timeout) ->
     @lastMessageId = 0
+    @lastCallbackId = 0
     @pendingMessages = {}
+    @callbacks = {}
 
   ###
   @param {String} method
   @param {Array} [params]
   @returns {Promise}
   ###
-  postMessage: (method, params = []) =>
+  postMessage: (method, reqParams = []) =>
     deferred = deferredFactory()
+    params = []
+
+    # callbacks
+    for param in reqParams
+      if typeof param is 'function'
+        @lastCallbackId += 1
+        id = @lastCallbackId
+        @callbacks[id] = param
+        params.push {_portalGunCallback: true, callbackId: id}
+      else
+        params.push param
+
     message = {method, params}
 
     try
@@ -76,7 +110,11 @@ class Poster
       message._portal = true
       message.jsonrpc = '2.0'
 
-      @pendingMessages[message.id] = deferred
+      @pendingMessages[message.id] = {
+        reject: deferred.reject
+        resolve: deferred.resolve
+        acknowledged: false
+      }
 
       window.parent.postMessage JSON.stringify(message), '*'
 
@@ -91,20 +129,27 @@ class Poster
     return deferred
 
   ###
-  @param {RPCResponse|RPCError}
+  @param {RPCResponse|RPCCallbackResponse|RPCError}
   ###
   resolveMessage: (message) =>
-    if not @pendingMessages[message.id]
-      return Promise.reject new Error 'Method not found'
+    if message.callbackId
+      if not @callbacks[message.callbackId]
+        return Promise.reject new Error 'Method not found'
 
-    else if message.error
-      @pendingMessages[message.id].reject new Error message.error.message
-
-    else if message.acknowledge
-      @pendingMessages[message.id].acknowledged = true
+      @callbacks[message.callbackId].apply null, message.params
 
     else
-      @pendingMessages[message.id].resolve message.result or null
+      if not @pendingMessages[message.id]
+        return Promise.reject new Error 'Method not found'
+
+      else if message.error
+        @pendingMessages[message.id].reject new Error message.error.message
+
+      else if message.acknowledge
+        @pendingMessages[message.id].acknowledged = true
+
+      else
+        @pendingMessages[message.id].resolve message.result or null
 
 
 class PortalGun
@@ -181,7 +226,22 @@ class PortalGun
       isRequest = Boolean message.method
 
       if isRequest
-        {id, method, params} = message
+        params = []
+        {id, method} = message
+        reqParams = message.params or []
+
+        # callbacks
+        for param in reqParams
+          if param?._portalGunCallback
+            params.push (params...) ->
+              e.source.postMessage JSON.stringify({
+                _portal: true
+                jsonrpc: '2.0'
+                callbackId: param.callbackId
+                params
+              }), '*'
+          else
+            params.push param
 
         # acknowledge request, prevent request timeout
         e.source.postMessage JSON.stringify({

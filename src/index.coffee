@@ -76,7 +76,7 @@ isValidOrigin = (origin, trusted, allowSubdomains) ->
 ###
 
 class Poster
-  constructor: (@timeout) ->
+  constructor: ->
     @lastMessageId = 0
     @lastCallbackId = 0
     @pendingMessages = {}
@@ -124,7 +124,7 @@ class Poster
     window.setTimeout ->
       unless deferred.acknowledged
         deferred.reject new Error 'Message Timeout'
-    , @timeout
+    , REQUEST_TIMEOUT_MS
 
     return deferred
 
@@ -157,7 +157,7 @@ class PortalGun
     @config =
       trusted: null
       allowSubdomains: false
-    @poster = new Poster timeout: REQUEST_TIMEOUT_MS
+    @poster = new Poster()
     @registeredMethods = {
       ping: -> 'pong'
     }

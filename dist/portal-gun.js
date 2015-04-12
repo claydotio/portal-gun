@@ -127,8 +127,7 @@ module.exports =
 	 */
 
 	Poster = (function() {
-	  function Poster(timeout) {
-	    this.timeout = timeout;
+	  function Poster() {
 	    this.resolveMessage = __bind(this.resolveMessage, this);
 	    this.postMessage = __bind(this.postMessage, this);
 	    this.lastMessageId = 0;
@@ -188,7 +187,7 @@ module.exports =
 	      if (!deferred.acknowledged) {
 	        return deferred.reject(new Error('Message Timeout'));
 	      }
-	    }, this.timeout);
+	    }, REQUEST_TIMEOUT_MS);
 	    return deferred;
 	  };
 
@@ -232,9 +231,7 @@ module.exports =
 	      trusted: null,
 	      allowSubdomains: false
 	    };
-	    this.poster = new Poster({
-	      timeout: REQUEST_TIMEOUT_MS
-	    });
+	    this.poster = new Poster();
 	    this.registeredMethods = {
 	      ping: function() {
 	        return 'pong';

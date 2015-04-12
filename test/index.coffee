@@ -145,13 +145,22 @@ describe 'portal-gun', ->
         err.message.should.be 'abc'
 
     it 'times out', ->
-      routePost 'infinite.loop', timeout: true
+      portal.__with__({'REQUEST_TIMEOUT_MS': 1}) ->
+        routePost 'infinite.loop', timeout: true
 
-      portal.call 'infinite.loop'
-      .then ->
-        throw new Error 'Missing error'
-      , (err) ->
-        err.message.should.be 'Message Timeout'
+        portal.call 'infinite.loop'
+        .then ->
+          throw new Error 'Missing error'
+        , (err) ->
+          err.message.should.be 'Message Timeout'
+
+          # timeout immediately after first failure
+          portal.__with__({'REQUEST_TIMEOUT_MS': 99999}) ->
+            portal.call 'infinite.loop'
+            .then ->
+              throw new Error 'Missing error'
+            , (err) ->
+              err.message.should.be 'Message Timeout'
 
     it 'supports callbacks', (done) ->
       routePost 'callme', {

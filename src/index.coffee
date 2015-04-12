@@ -2,8 +2,8 @@ Promise = window.Promise or require 'promiz'
 
 IS_FRAMED = window.self isnt window.top
 
-# If a promise response is not recieved within this time, fail the request
-REQUEST_TIMEOUT_MS = 10
+# If a response is not recieved within this time, consider the parent dead
+REQUEST_TIMEOUT_MS = 1000
 
 deferredFactory = ->
   resolve = null
@@ -81,6 +81,7 @@ class Poster
     @lastCallbackId = 0
     @pendingMessages = {}
     @callbacks = {}
+    @isParentDead = false
 
   ###
   @param {String} method
@@ -121,10 +122,14 @@ class Poster
     catch err
       deferred.reject err
 
-    window.setTimeout ->
+    window.setTimeout =>
       unless deferred.acknowledged
+        @isParentDead = true
         deferred.reject new Error 'Message Timeout'
     , REQUEST_TIMEOUT_MS
+
+    if @isParentDead
+      deferred.reject new Error 'Message Timeout'
 
     return deferred
 

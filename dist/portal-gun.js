@@ -53,7 +53,7 @@ module.exports =
 
 	IS_FRAMED = window.self !== window.top;
 
-	REQUEST_TIMEOUT_MS = 10;
+	REQUEST_TIMEOUT_MS = 1000;
 
 	deferredFactory = function() {
 	  var promise, reject, resolve;
@@ -134,6 +134,7 @@ module.exports =
 	    this.lastCallbackId = 0;
 	    this.pendingMessages = {};
 	    this.callbacks = {};
+	    this.isParentDead = false;
 	  }
 
 
@@ -183,11 +184,17 @@ module.exports =
 	      err = _error;
 	      deferred.reject(err);
 	    }
-	    window.setTimeout(function() {
-	      if (!deferred.acknowledged) {
-	        return deferred.reject(new Error('Message Timeout'));
-	      }
-	    }, REQUEST_TIMEOUT_MS);
+	    window.setTimeout((function(_this) {
+	      return function() {
+	        if (!deferred.acknowledged) {
+	          _this.isParentDead = true;
+	          return deferred.reject(new Error('Message Timeout'));
+	        }
+	      };
+	    })(this), REQUEST_TIMEOUT_MS);
+	    if (this.isParentDead) {
+	      deferred.reject(new Error('Message Timeout'));
+	    }
 	    return deferred;
 	  };
 

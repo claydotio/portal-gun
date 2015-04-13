@@ -146,15 +146,15 @@ class Poster
     else
       if not @pendingMessages[message.id]
         return Promise.reject new Error 'Method not found'
-
-      else if message.error
-        @pendingMessages[message.id].reject new Error message.error.message
-
-      else if message.acknowledge
+      else
         @pendingMessages[message.id].acknowledged = true
 
-      else
-        @pendingMessages[message.id].resolve message.result or null
+        if message.acknowledge
+          return Promise.resolve null
+        else if message.error
+          @pendingMessages[message.id].reject new Error message.error.message
+        else
+          @pendingMessages[message.id].resolve message.result or null
 
 
 class PortalGun

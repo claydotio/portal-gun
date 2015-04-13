@@ -186,7 +186,7 @@ module.exports =
 	    }
 	    window.setTimeout((function(_this) {
 	      return function() {
-	        if (!deferred.acknowledged) {
+	        if (!_this.pendingMessages[message.id].acknowledged) {
 	          _this.isParentDead = true;
 	          return deferred.reject(new Error('Message Timeout'));
 	        }

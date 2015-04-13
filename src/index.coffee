@@ -123,7 +123,7 @@ class Poster
       deferred.reject err
 
     window.setTimeout =>
-      unless deferred.acknowledged
+      unless @pendingMessages[message.id].acknowledged
         @isParentDead = true
         deferred.reject new Error 'Message Timeout'
     , REQUEST_TIMEOUT_MS

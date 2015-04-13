@@ -212,12 +212,15 @@ module.exports =
 	    } else {
 	      if (!this.pendingMessages[message.id]) {
 	        return Promise.reject(new Error('Method not found'));
-	      } else if (message.error) {
-	        return this.pendingMessages[message.id].reject(new Error(message.error.message));
-	      } else if (message.acknowledge) {
-	        return this.pendingMessages[message.id].acknowledged = true;
 	      } else {
-	        return this.pendingMessages[message.id].resolve(message.result || null);
+	        this.pendingMessages[message.id].acknowledged = true;
+	        if (message.acknowledge) {
+	          return Promise.resolve(null);
+	        } else if (message.error) {
+	          return this.pendingMessages[message.id].reject(new Error(message.error.message));
+	        } else {
+	          return this.pendingMessages[message.id].resolve(message.result || null);
+	        }
 	      }
 	    }
 	  };

@@ -261,12 +261,14 @@ module.exports =
 	  PortalGun.prototype.up = function(_arg) {
 	    var allowSubdomains, trusted, _ref;
 	    _ref = _arg != null ? _arg : {}, trusted = _ref.trusted, allowSubdomains = _ref.allowSubdomains;
-	    if (trusted != null) {
-	      this.config.trusted = trusted;
+	    if (trusted == null) {
+	      trusted = null;
 	    }
-	    if (allowSubdomains != null) {
-	      this.config.allowSubdomains = allowSubdomains;
+	    if (allowSubdomains == null) {
+	      allowSubdomains = false;
 	    }
+	    this.config.trusted = trusted;
+	    this.config.allowSubdomains = allowSubdomains;
 	    return window.addEventListener('message', this.onMessage);
 	  };
 

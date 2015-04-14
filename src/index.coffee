@@ -175,10 +175,10 @@ class PortalGun
   @param {Boolean} config.allowSubdomains - trust subdomains of trusted domain
   ###
   up: ({trusted, allowSubdomains} = {}) =>
-    if trusted?
-      @config.trusted = trusted
-    if allowSubdomains?
-      @config.allowSubdomains = allowSubdomains
+    trusted ?= null
+    allowSubdomains ?= false
+    @config.trusted = trusted
+    @config.allowSubdomains = allowSubdomains
     window.addEventListener 'message', @onMessage
 
   # Remove global message event listener

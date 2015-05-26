@@ -133,6 +133,17 @@ describe 'portal-gun', ->
       .then (user) ->
         user.test.should.be true
 
+
+    # https://github.com/claydotio/portal-gun/issues/3
+    it 'recieves false from parent frame', ->
+      routePost 'mirror',
+        data:
+          result: false
+
+      portal.call 'mirror'
+      .then (res) ->
+        res.should.be false
+
     it 'recieves errors', ->
       routePost 'mirror',
         data:

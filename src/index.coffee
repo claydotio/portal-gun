@@ -154,7 +154,10 @@ class Poster
         else if message.error
           @pendingMessages[message.id].reject new Error message.error.message
         else
-          @pendingMessages[message.id].resolve message.result or null
+          if message.result?
+            @pendingMessages[message.id].resolve message.result
+          else
+            @pendingMessages[message.id].resolve null
 
 
 class PortalGun

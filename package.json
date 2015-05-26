@@ -1,6 +1,6 @@
 {
   "name": "portal-gun",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "",
   "main": "dist/portal-gun.js",
   "scripts": {

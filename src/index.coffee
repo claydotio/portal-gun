@@ -3,7 +3,7 @@ Promise = window.Promise or require 'promiz'
 IS_FRAMED = window.self isnt window.top
 
 # If a response is not recieved within this time, consider the parent dead
-REQUEST_TIMEOUT_MS = 1000
+REQUEST_TIMEOUT_MS = 2000
 
 deferredFactory = ->
   resolve = null
@@ -81,7 +81,6 @@ class Poster
     @lastCallbackId = 0
     @pendingMessages = {}
     @callbacks = {}
-    @isParentDead = false
 
   ###
   @param {String} method
@@ -124,12 +123,8 @@ class Poster
 
     window.setTimeout =>
       unless @pendingMessages[message.id].acknowledged
-        @isParentDead = true
         deferred.reject new Error 'Message Timeout'
     , REQUEST_TIMEOUT_MS
-
-    if @isParentDead
-      deferred.reject new Error 'Message Timeout'
 
     return deferred
 
@@ -183,6 +178,7 @@ class PortalGun
     @config.trusted = trusted
     @config.allowSubdomains = allowSubdomains
     window.addEventListener 'message', @onMessage
+    @validation = @poster.postMessage 'ping'
 
   # Remove global message event listener
   down: =>
@@ -206,7 +202,7 @@ class PortalGun
 
     if IS_FRAMED
       frameError = null
-      @validateParent()
+      @validation
       .then =>
         @poster.postMessage method, params
       .catch (err) ->
@@ -220,9 +216,6 @@ class PortalGun
     else
       new Promise (resolve) ->
         resolve localMethod(method, params)
-
-  validateParent: =>
-    @poster.postMessage 'ping'
 
   onMessage: (e) =>
     try

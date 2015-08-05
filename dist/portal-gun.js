@@ -53,7 +53,7 @@ module.exports =
 
 	IS_FRAMED = window.self !== window.top;
 
-	REQUEST_TIMEOUT_MS = 1000;
+	REQUEST_TIMEOUT_MS = 2000;
 
 	deferredFactory = function() {
 	  var promise, reject, resolve;
@@ -134,7 +134,6 @@ module.exports =
 	    this.lastCallbackId = 0;
 	    this.pendingMessages = {};
 	    this.callbacks = {};
-	    this.isParentDead = false;
 	  }
 
 
@@ -187,14 +186,10 @@ module.exports =
 	    window.setTimeout((function(_this) {
 	      return function() {
 	        if (!_this.pendingMessages[message.id].acknowledged) {
-	          _this.isParentDead = true;
 	          return deferred.reject(new Error('Message Timeout'));
 	        }
 	      };
 	    })(this), REQUEST_TIMEOUT_MS);
-	    if (this.isParentDead) {
-	      deferred.reject(new Error('Message Timeout'));
-	    }
 	    return deferred;
 	  };
 
@@ -219,7 +214,11 @@ module.exports =
 	        } else if (message.error) {
 	          return this.pendingMessages[message.id].reject(new Error(message.error.message));
 	        } else {
-	          return this.pendingMessages[message.id].resolve(message.result || null);
+	          if (message.result != null) {
+	            return this.pendingMessages[message.id].resolve(message.result);
+	          } else {
+	            return this.pendingMessages[message.id].resolve(null);
+	          }
 	        }
 	      }
 	    }
@@ -233,7 +232,6 @@ module.exports =
 	  function PortalGun() {
 	    this.on = __bind(this.on, this);
 	    this.onMessage = __bind(this.onMessage, this);
-	    this.validateParent = __bind(this.validateParent, this);
 	    this.call = __bind(this.call, this);
 	    this.down = __bind(this.down, this);
 	    this.up = __bind(this.up, this);
@@ -269,7 +267,8 @@ module.exports =
 	    }
 	    this.config.trusted = trusted;
 	    this.config.allowSubdomains = allowSubdomains;
-	    return window.addEventListener('message', this.onMessage);
+	    window.addEventListener('message', this.onMessage);
+	    return this.validation = this.poster.postMessage('ping');
 	  };
 
 	  PortalGun.prototype.down = function() {
@@ -302,7 +301,7 @@ module.exports =
 	    })(this);
 	    if (IS_FRAMED) {
 	      frameError = null;
-	      return this.validateParent().then((function(_this) {
+	      return this.validation.then((function(_this) {
 	        return function() {
 	          return _this.poster.postMessage(method, params);
 	        };
@@ -321,10 +320,6 @@ module.exports =
 	        return resolve(localMethod(method, params));
 	      });
 	    }
-	  };
-
-	  PortalGun.prototype.validateParent = function() {
-	    return this.poster.postMessage('ping');
 	  };
 
 	  PortalGun.prototype.onMessage = function(e) {

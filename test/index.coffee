@@ -37,7 +37,6 @@ portal.__set__ 'window.parent.postMessage', (messageString, targetOrigin) ->
   message = JSON.parse messageString
   _.isString(message.id).should.be true
   message._portal.should.be true
-  message.jsonrpc.should.be '2.0'
 
   postRoutes[message.method].should.exist
 
@@ -72,7 +71,6 @@ dispatchEvent = (data) ->
         message = JSON.parse messageString
         message.id.should.be '1'
         message._portal.should.be true
-        message.jsonrpc.should.be '2.0'
 
         if message.error
           reject message.error

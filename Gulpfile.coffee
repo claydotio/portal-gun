@@ -14,7 +14,7 @@ packangeConf = require './package.json'
 paths =
   coffee: ['./src/**/*.coffee', './*.coffee', './test/**/*.coffee']
   rootScripts: './src/index.coffee'
-  rootTests: './test/index.coffee'
+  rootTests: './test/**/*.coffee'
   dist: './dist/'
   build: './build/'
 

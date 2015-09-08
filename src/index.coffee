@@ -5,8 +5,6 @@ errors = require './errors'
 
 IS_FRAMED = window.self isnt window.top
 
-REQUEST_TIMEOUT_MS = 2000
-
 isValidOrigin = (origin, trusted, allowSubdomains) ->
   unless trusted?
     return true
@@ -31,7 +29,6 @@ class PortalGun
     @client = new RPCClient({
       postMessage: (msg, origin) ->
         window.parent?.postMessage msg, origin
-      timeout: REQUEST_TIMEOUT_MS
     })
     @registeredMethods = {
       ping: -> 'pong'
@@ -129,42 +126,11 @@ class PortalGun
             requestId: message.id
             rPCError: rPCError
           }
-      else if @client.isRPCRequestAcknowledgement message
+      else if @client.isRPCEntity message
         if isValidOrigin e.origin, @config.trusted, @config.allowSubdomains
-          @client.resolveRPCRequestAcknowledgement message
+          @client.resolve message
         else
-          @client.resolveRPCResponse @client.createRPCResponse {
-            requestId: message.id
-            rPCError: @client.createRPCError {
-              code: errors.CODES.INVALID_ORIGIN
-              data:
-                origin: e.origin
-            }
-          }
-      else if @client.isRPCResponse message
-        if isValidOrigin e.origin, @config.trusted, @config.allowSubdomains
-          @client.resolveRPCResponse message
-        else
-          @client.resolveRPCResponse @client.createRPCResponse {
-            requestId: message.id
-            rPCError: @client.createRPCError {
-              code: errors.CODES.INVALID_ORIGIN
-              data:
-                origin: e.origin
-            }
-          }
-      else if @client.isRPCCallbackResponse message
-        if isValidOrigin e.origin, @config.trusted, @config.allowSubdomains
-          @client.resolveRPCCallbackResponse message
-        else
-          @client.resolveRPCCallbackResponse @client.createRPCCallbackResponse {
-            callbackId: message.callbackId
-            rPCError: @client.createRPCError {
-              code: errors.CODES.INVALID_ORIGIN
-              data:
-                origin: e.origin
-            }
-          }
+          throw new Error 'invalid origin'
       else
         throw new Error 'Unknown RPCEntity type'
     catch err

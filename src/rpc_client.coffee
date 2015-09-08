@@ -1,11 +1,4 @@
 ###
-# _portal is added to denote a portal-gun message
-# RPCRequestAcknowledgement is to ensure the responder recieved the request
-# RPCCallbackResponse is added to support callbacks for methods
-#
-# params, if containing a callback function, will have that method replaced
-# with RPCCallback which should be used to emit callback responses
-#
 # Child {RPCRequest} -> Parent
 #   Parent {RPCRequestAcknowledgement} -> Child
 #   Parent {RPCResponse} -> Child
@@ -17,44 +10,21 @@
 #   Parent {RPCCallbackResponse} -> Child
 #
 # Parent {RPCError} -> Child
-
-@typedef {Object} RPCRequest
-@property {Boolean} _portal - Must be true
-@property {String} id
-@property {String} method
-@property {Array<*>} params
-
-@typedef {Object} RPCRequestAcknowledgement
-@property {Boolean} _portal - Must be true
-@property {String} id
-@property {Boolean} acknowledge - must be true
-
-@typedef {Object} RPCResponse
-@property {Boolean} _portal - Must be true
-@property {String} id
-@property {*} result
-@property {RPCError} error
-
-@typedef {Object} RPCCallback
-@property {Boolean} _portal - Must be true
-@property {String} callbackId
-@property {Boolean} _portalGunCallback - Must be true
-
-@typedef {Object} RPCCallbackResponse
-@property {Boolean} _portal - Must be true
-@property {String} callbackId
-@property {Array<*>} params
-
-@typedef {Object} RPCError
-@property {Boolean} _portal - Must be true
-@property {Integer} code
-@property {String} message
-@property {Object} data - optional
+#
+#
+# _portal is added to denote a portal-gun message
+# RPCRequestAcknowledgement is to ensure the responder recieved the request
+# RPCCallbackResponse is added to support callbacks for methods
+#
+# params, if containing a callback function, will have that method replaced
+# with RPCCallback which should be used to emit callback responses
 ###
 
 Promise = window.Promise or require 'promiz'
 
 errors = require './errors'
+
+REQUEST_TIMEOUT_MS = 2000
 
 deferredFactory = ->
   resolve = null
@@ -68,11 +38,18 @@ deferredFactory = ->
   return promise
 
 module.exports = class RPCClient
-  constructor: ({@postMessage, @timeout}) ->
+  constructor: ({@postMessage, @timeout} = {}) ->
+    @timeout ?= REQUEST_TIMEOUT_MS
     @pendingRequests = {}
     @callbackFunctions = {}
 
   ###
+  @typedef {Object} RPCRequest
+  @property {Boolean} _portal - Must be true
+  @property {String} id
+  @property {String} method
+  @property {Array<*>} params
+
   @param {Object} props
   @param {String} props.method
   @param {Array<*>} [props.params] - Functions are not allowed
@@ -89,6 +66,11 @@ module.exports = class RPCClient
       return {_portal: true, id, method, params}
 
   ###
+  @typedef {Object} RPCCallback
+  @property {Boolean} _portal - Must be true
+  @property {String} callbackId
+  @property {Boolean} _portalGunCallback - Must be true
+
   @returns RPCCallback
   ###
   createRPCCallback: do (lastCallbackId = 0) ->
@@ -98,6 +80,11 @@ module.exports = class RPCClient
       return {_portal: true, _portalGunCallback: true, callbackId: id}
 
   ###
+  @typedef {Object} RPCCallbackResponse
+  @property {Boolean} _portal - Must be true
+  @property {String} callbackId
+  @property {Array<*>} params
+
   @param {Object} props
   @param {Array<*>} props.params
   @param {String} props.callbackId
@@ -107,6 +94,11 @@ module.exports = class RPCClient
     return {_portal: true, callbackId: callbackId, params}
 
   ###
+  @typedef {Object} RPCRequestAcknowledgement
+  @property {Boolean} _portal - Must be true
+  @property {String} id
+  @property {Boolean} acknowledge - must be true
+
   @param {Object} props
   @param {String} props.responseId
   @returns RPCRequestAcknowledgement
@@ -115,6 +107,12 @@ module.exports = class RPCClient
     return {_portal: true, id: requestId, acknowledge: true}
 
   ###
+  @typedef {Object} RPCResponse
+  @property {Boolean} _portal - Must be true
+  @property {String} id
+  @property {*} result
+  @property {RPCError} error
+
   @param {Object} props
   @param {String} props.requestId
   @param {*} [props.result]
@@ -127,6 +125,12 @@ module.exports = class RPCClient
     return {_portal: true, id: requestId, result, error: rPCError}
 
   ###
+  @typedef {Object} RPCError
+  @property {Boolean} _portal - Must be true
+  @property {Integer} code
+  @property {String} message
+  @property {Object} data - optional
+
   @param {Object} props
   @param {Errpr} [props.error]
   @returns RPCError
@@ -188,9 +192,23 @@ module.exports = class RPCClient
     return deferred
 
   ###
+  @param {RPCResponse|RPCRequestAcknowledgement|RPCCallbackResponse} response
+  ###
+  resolve: (response) =>
+    switch
+      when @isRPCRequestAcknowledgement response
+        @resolveRPCRequestAcknowledgement response
+      when @isRPCResponse response
+        @resolveRPCResponse response
+      when @isRPCCallbackResponse response
+        @resolveRPCCallbackResponse response
+      else
+        throw new Error 'Unknown response type'
+
+  ###
   @param {RPCResponse} rPCResponse
   ###
-  resolveRPCResponse: (rPCResponse) ->
+  resolveRPCResponse: (rPCResponse) =>
     request = @pendingRequests[rPCResponse.id]
     unless request?
       throw new Error 'Request not found'
@@ -209,7 +227,7 @@ module.exports = class RPCClient
   ###
   @param {RPCRequestAcknowledgement} rPCRequestAcknowledgement
   ###
-  resolveRPCRequestAcknowledgement: (rPCRequestAcknowledgement) ->
+  resolveRPCRequestAcknowledgement: (rPCRequestAcknowledgement) =>
     request = @pendingRequests[rPCRequestAcknowledgement.id]
     unless request?
       throw new Error 'Request not found'

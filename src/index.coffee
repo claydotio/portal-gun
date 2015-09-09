@@ -3,6 +3,7 @@ Promise = window.Promise or require 'promiz'
 RPCClient = require './rpc_client'
 
 IS_FRAMED = window.self isnt window.top
+HANDSHAKE_TIMEOUT_MS = 10 * 1000 # 10 seconds
 
 isValidOrigin = (origin, trusted, allowSubdomains) ->
   unless trusted?
@@ -46,7 +47,7 @@ class PortalGun
   listen: =>
     @isListening = true
     window.addEventListener 'message', @onMessage
-    @validation = @client.call 'ping'
+    @validation = @client.call 'ping', null, {timeout: HANDSHAKE_TIMEOUT_MS}
 
   ###
   @param {String} method

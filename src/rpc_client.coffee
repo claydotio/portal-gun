@@ -33,7 +33,7 @@ ERROR_MESSAGES[ERROR_CODES.METHOD_NOT_FOUND] = 'Method not found'
 ERROR_MESSAGES[ERROR_CODES.INVALID_ORIGIN] = 'Invalid origin'
 ERROR_MESSAGES[ERROR_CODES.DEFAULT] = 'Error'
 
-DEFAULT_REQUEST_TIMEOUT_MS = 2000
+DEFAULT_REQUEST_TIMEOUT_MS = 3000
 
 deferredFactory = ->
   resolve = null
@@ -165,7 +165,8 @@ module.exports = class RPCClient
   @param {Array<*>} [params]
   @returns {Promise}
   ###
-  call: (method, reqParams = []) =>
+  call: (method, reqParams = [], {timeout} = {}) =>
+    timeout ?= @timeout
     deferred = deferredFactory()
     params = []
 
@@ -195,7 +196,7 @@ module.exports = class RPCClient
     window.setTimeout =>
       unless @pendingRequests[request.id].isAcknowledged
         deferred.reject new Error 'Message Timeout'
-    , @timeout
+    , timeout
 
     return deferred
 

@@ -116,12 +116,22 @@ describe 'rpc-client', ->
     })
     client.call 'add', [1, (-> null)]
 
-  it 'times out request', (done) ->
+  it 'times out all requests', (done) ->
     client = new RPCClient({
       postMessage: -> null
       timeout: 10
     })
     client.call 'add', [1, 2]
+    .catch (err) ->
+      b err.message, 'Message Timeout'
+      done()
+
+  it 'times out single request', (done) ->
+    client = new RPCClient({
+      postMessage: -> null
+      timeout: 10000
+    })
+    client.call 'add', [1, 2], {timeout: 0}
     .catch (err) ->
       b err.message, 'Message Timeout'
       done()

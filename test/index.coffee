@@ -174,6 +174,7 @@ describe 'portal-gun', ->
         'https://x.com/'
         'http://x.com'
         'https://x.com'
+        'http://y.com'
       ]
       Promise.map domains, (domain) ->
         withParent {
@@ -182,7 +183,7 @@ describe 'portal-gun', ->
             ping: -> 'pong'
         }, ->
           portal = new PortalGun({
-            trusted: ['x.com']
+            trusted: ['x.com', 'y.com']
           })
           portal.listen()
           portal.call 'ping'
@@ -195,6 +196,7 @@ describe 'portal-gun', ->
         'https://sub.x.com/'
         'http://sub.x.com'
         'https://sub.x.com'
+        'https://sub.y.com'
 
         'http://sub.sub.x.com/'
         'https://sub.sub.x.com/'
@@ -209,7 +211,7 @@ describe 'portal-gun', ->
             ping: -> 'pong'
         }, ->
           portal = new PortalGun({
-            trusted: ['x.com']
+            trusted: ['x.com', 'y.com']
             allowSubdomains: true
           })
           portal.listen()

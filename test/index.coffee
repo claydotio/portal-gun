@@ -3,8 +3,6 @@ require './polyfill'
 _ = require 'lodash'
 rewire = require 'rewire'
 Promise = require 'bluebird'
-# FIXME
-should = require('clay-chai').should()
 b = require 'b-assert'
 
 PortalGun = require '../src/index'

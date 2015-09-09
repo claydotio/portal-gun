@@ -33,7 +33,7 @@ ERROR_MESSAGES[ERROR_CODES.METHOD_NOT_FOUND] = 'Method not found'
 ERROR_MESSAGES[ERROR_CODES.INVALID_ORIGIN] = 'Invalid origin'
 ERROR_MESSAGES[ERROR_CODES.DEFAULT] = 'Error'
 
-REQUEST_TIMEOUT_MS = 2000
+DEFAULT_REQUEST_TIMEOUT_MS = 2000
 
 deferredFactory = ->
   resolve = null
@@ -50,7 +50,7 @@ module.exports = class RPCClient
   @ERROR_CODES: ERROR_CODES
   @ERROR_MESSAGES: ERROR_MESSAGES
   constructor: ({@postMessage, @timeout} = {}) ->
-    @timeout ?= REQUEST_TIMEOUT_MS
+    @timeout ?= DEFAULT_REQUEST_TIMEOUT_MS
     @pendingRequests = {}
     @callbackFunctions = {}
 

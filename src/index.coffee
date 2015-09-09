@@ -1,7 +1,6 @@
 Promise = window.Promise or require 'promiz'
 
 RPCClient = require './rpc_client'
-errors = require './errors'
 
 IS_FRAMED = window.self isnt window.top
 
@@ -92,20 +91,20 @@ class PortalGun
     try # silent
       message = if typeof e.data is 'string' then JSON.parse(e.data) else e.data
 
-      unless @client.isRPCEntity message
+      unless RPCClient.isRPCEntity message
         throw new Error 'Non-portal message'
 
-      if @client.isRPCRequest message
+      if RPCClient.isRPCRequest message
         method = message.method
         reqParams = message.params or []
         params = []
 
         # replace callback params with proxy functions
         for param in reqParams
-          if @client.isRPCCallback param
-            do (param) =>
-              params.push (args...) =>
-                reply @client.createRPCCallbackResponse {
+          if RPCClient.isRPCCallback param
+            do (param) ->
+              params.push (args...) ->
+                reply RPCClient.createRPCCallbackResponse {
                   params: args
                   callbackId: param.callbackId
                 }
@@ -113,34 +112,33 @@ class PortalGun
             params.push param
 
         # acknowledge request, prevent request timeout
-        reply @client.createRPCRequestAcknowledgement {requestId: message.id}
+        reply RPCClient.createRPCRequestAcknowledgement {requestId: message.id}
 
         @call method, params
-        .then (result) =>
-          reply @client.createRPCResponse {
+        .then (result) ->
+          reply RPCClient.createRPCResponse {
             requestId: message.id
             result: result
           }
-        .catch (err) =>
-          reply @client.createRPCResponse {
+        .catch (err) ->
+          reply RPCClient.createRPCResponse {
             requestId: message.id
-            rPCError: @client.createRPCError {
-              code: errors.CODES.DEFAULT
+            rPCError: RPCClient.createRPCError {
+              code: RPCClient.ERROR_CODES.DEFAULT
             }
           }
-      else if @client.isRPCEntity message
+      else if RPCClient.isRPCEntity message
         if isValidOrigin e.origin, @trusted, @allowSubdomains
           @client.resolve message
-        else if @client.isRPCResponse message
-          @client.resolve @client.createRPCResponse {
+        else if RPCClient.isRPCResponse message
+          @client.resolve RPCClient.createRPCResponse {
             requestId: message.id
-            rPCError: @client.createRPCError {
-              code: errors.CODES.INVALID_ORIGIN
+            rPCError: RPCClient.createRPCError {
+              code: RPCClient.ERROR_CODES.INVALID_ORIGIN
             }
           }
         else
-          # FIXME
-          throw new Error 'invalid origin'
+          throw new Error 'Invalid origin'
       else
         throw new Error 'Unknown RPCEntity type'
     catch err

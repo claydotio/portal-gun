@@ -23,7 +23,15 @@
 Promise = window.Promise or require 'promiz'
 uuid = require 'uuid'
 
-errors = require './errors'
+ERROR_CODES =
+  METHOD_NOT_FOUND: -32601
+  INVALID_ORIGIN: 100
+  DEFAULT: -1
+
+ERROR_MESSAGES = {}
+ERROR_MESSAGES[ERROR_CODES.METHOD_NOT_FOUND] = 'Method not found'
+ERROR_MESSAGES[ERROR_CODES.INVALID_ORIGIN] = 'Invalid origin'
+ERROR_MESSAGES[ERROR_CODES.DEFAULT] = 'Error'
 
 REQUEST_TIMEOUT_MS = 2000
 
@@ -38,8 +46,9 @@ deferredFactory = ->
 
   return promise
 
-# FIXME: maybe make create and is* methods class methods?
 module.exports = class RPCClient
+  @ERROR_CODES: ERROR_CODES
+  @ERROR_MESSAGES: ERROR_MESSAGES
   constructor: ({@postMessage, @timeout} = {}) ->
     @timeout ?= REQUEST_TIMEOUT_MS
     @pendingRequests = {}
@@ -57,7 +66,7 @@ module.exports = class RPCClient
   @param {Array<*>} [props.params] - Functions are not allowed
   @returns RPCRequest
   ###
-  createRPCRequest: ({method, params}) ->
+  @createRPCRequest: ({method, params}) ->
     unless params?
       throw new Error 'Must provide params'
 
@@ -75,7 +84,7 @@ module.exports = class RPCClient
 
   @returns RPCCallback
   ###
-  createRPCCallback: ->
+  @createRPCCallback: ->
     return {_portal: true, _portalGunCallback: true, callbackId: uuid.v4()}
 
   ###
@@ -89,7 +98,7 @@ module.exports = class RPCClient
   @param {String} props.callbackId
   @returns RPCCallbackResponse
   ###
-  createRPCCallbackResponse: ({params, callbackId}) ->
+  @createRPCCallbackResponse: ({params, callbackId}) ->
     return {_portal: true, callbackId: callbackId, params}
 
   ###
@@ -102,7 +111,7 @@ module.exports = class RPCClient
   @param {String} props.responseId
   @returns RPCRequestAcknowledgement
   ###
-  createRPCRequestAcknowledgement: ({requestId}) ->
+  @createRPCRequestAcknowledgement: ({requestId}) ->
     return {_portal: true, id: requestId, acknowledge: true}
 
   ###
@@ -118,7 +127,7 @@ module.exports = class RPCClient
   @param {RPCError|Null} [props.error]
   @returns RPCResponse
   ###
-  createRPCResponse: ({requestId, result, rPCError}) ->
+  @createRPCResponse: ({requestId, result, rPCError}) ->
     result ?= null
     rPCError ?= null
     return {_portal: true, id: requestId, result, error: rPCError}
@@ -134,22 +143,22 @@ module.exports = class RPCClient
   @param {Errpr} [props.error]
   @returns RPCError
   ###
-  createRPCError: ({code, data}) ->
+  @createRPCError: ({code, data}) ->
     data ?= null
-    message = errors.MESSAGES[code]
+    message = ERROR_MESSAGES[code]
     return {_portal: true, code, message, data}
 
-  isRPCEntity: (entity) -> entity?._portal
-  isRPCRequest: (request) ->
+  @isRPCEntity: (entity) -> entity?._portal
+  @isRPCRequest: (request) ->
     request?.id? and request.method?
-  isRPCCallback: (callback) -> callback?._portalGunCallback
-  isRPCResponse: (response) ->
+  @isRPCCallback: (callback) -> callback?._portalGunCallback
+  @isRPCResponse: (response) ->
     response?.id and (
       response.result isnt undefined or response.error isnt undefined
     )
-  isRPCCallbackResponse: (response) ->
+  @isRPCCallbackResponse: (response) ->
     response?.callbackId? and response.params?
-  isRPCRequestAcknowledgement: (ack) -> ack?.acknowledge is true
+  @isRPCRequestAcknowledgement: (ack) -> ack?.acknowledge is true
 
   ###
   @param {String} method
@@ -163,13 +172,13 @@ module.exports = class RPCClient
     # replace callback params
     for param in reqParams
       if typeof param is 'function'
-        callback = @createRPCCallback param
+        callback = RPCClient.createRPCCallback param
         @callbackFunctions[callback.callbackId] = param
         params.push callback
       else
         params.push param
 
-    request = @createRPCRequest {method, params}
+    request = RPCClient.createRPCRequest {method, params}
 
     @pendingRequests[request.id] = {
       reject: deferred.reject
@@ -195,11 +204,11 @@ module.exports = class RPCClient
   ###
   resolve: (response) =>
     switch
-      when @isRPCRequestAcknowledgement response
+      when RPCClient.isRPCRequestAcknowledgement response
         @resolveRPCRequestAcknowledgement response
-      when @isRPCResponse response
+      when RPCClient.isRPCResponse response
         @resolveRPCResponse response
-      when @isRPCCallbackResponse response
+      when RPCClient.isRPCCallbackResponse response
         @resolveRPCCallbackResponse response
       else
         throw new Error 'Unknown response type'

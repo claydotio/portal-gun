@@ -5,24 +5,32 @@ b = require 'b-assert'
 RPCClient = require '../src/rpc_client'
 
 describe 'rpc-client', ->
+  it 'has error codes', ->
+    b RPCClient.ERROR_CODES.METHOD_NOT_FOUND, -32601
+    b RPCClient.ERROR_CODES.DEFAULT, -1
+
+  it 'has error messages', ->
+    notFound = RPCClient.ERROR_CODES.METHOD_NOT_FOUND
+    def = RPCClient.ERROR_CODES.DEFAULT
+
+    b RPCClient.ERROR_MESSAGES[notFound], 'Method not found'
+    b RPCClient.ERROR_MESSAGES[def], 'Error'
+
   it 'creates RPCRequest', ->
-    client = new RPCClient()
-    res = client.createRPCRequest({method: 'm', params: ['a', 'b']})
+    res = RPCClient.createRPCRequest({method: 'm', params: ['a', 'b']})
     b res._portal, true
     b _.isString res.id
     b res.method, 'm'
     b res.params, ['a', 'b']
 
   it 'creates RPCCallback', ->
-    client = new RPCClient()
-    res = client.createRPCCallback()
+    res = RPCClient.createRPCCallback()
     b res._portal, true
     b res._portalGunCallback, true
     b _.isString res.callbackId
 
   it 'creates RPCCallbackResponse', ->
-    client = new RPCClient()
-    res = client.createRPCCallbackResponse({params: ['x'], callbackId: 'x'})
+    res = RPCClient.createRPCCallbackResponse({params: ['x'], callbackId: 'x'})
     b res, {
       _portal: true
       callbackId: 'x'
@@ -30,8 +38,7 @@ describe 'rpc-client', ->
     }
 
   it 'creates RPCRequestAcknowledgement', ->
-    client = new RPCClient()
-    res = client.createRPCRequestAcknowledgement({requestId: 'x'})
+    res = RPCClient.createRPCRequestAcknowledgement({requestId: 'x'})
     b res, {
       _portal: true
       id: 'x'
@@ -39,8 +46,7 @@ describe 'rpc-client', ->
     }
 
   it 'creates RPCError', ->
-    client = new RPCClient()
-    res = client.createRPCError({code: -1, data: {x: 'y'}})
+    res = RPCClient.createRPCError({code: -1, data: {x: 'y'}})
     b res, {
       _portal: true
       code: -1
@@ -49,8 +55,7 @@ describe 'rpc-client', ->
     }
 
   it 'creates RPCResponse', ->
-    client = new RPCClient()
-    res = client.createRPCResponse({requestId: 'x', result: 'z'})
+    res = RPCClient.createRPCResponse({requestId: 'x', result: 'z'})
     b res, {
       _portal: true
       id: 'x'
@@ -59,9 +64,8 @@ describe 'rpc-client', ->
     }
 
   it 'creates RPCResponse with error', ->
-    client = new RPCClient()
-    error = client.createRPCError({code: -1, data: {x: 'y'}})
-    res = client.createRPCResponse({requestId: 'x', rPCError: error})
+    error = RPCClient.createRPCError({code: -1, data: {x: 'y'}})
+    res = RPCClient.createRPCResponse({requestId: 'x', rPCError: error})
     b res, {
       _portal: true
       id: 'x'
@@ -70,40 +74,34 @@ describe 'rpc-client', ->
     }
 
   it 'isRPCEntity', ->
-    client = new RPCClient()
-    b client.isRPCEntity({_portal: true}), true
-    b client.isRPCEntity({_portal: false}), false
+    b RPCClient.isRPCEntity({_portal: true}), true
+    b RPCClient.isRPCEntity({_portal: false}), false
 
   it 'isRPCRequest', ->
-    client = new RPCClient()
-    b client.isRPCRequest({id: 'x', method: 'y'}), true
-    b client.isRPCRequest({id: 'x', method: null}), false
+    b RPCClient.isRPCRequest({id: 'x', method: 'y'}), true
+    b RPCClient.isRPCRequest({id: 'x', method: null}), false
 
   it 'isRPCCallback', ->
-    client = new RPCClient()
-    b client.isRPCCallback({_portalGunCallback: true}), true
-    b client.isRPCCallback({_portalGunCallback: false}), false
+    b RPCClient.isRPCCallback({_portalGunCallback: true}), true
+    b RPCClient.isRPCCallback({_portalGunCallback: false}), false
 
   it 'isRPCResponse', ->
-    client = new RPCClient()
-    b client.isRPCResponse({id: 'x', result: 'x'}), true
-    b client.isRPCResponse({id: 'x', error: 'x'}), true
-    b client.isRPCResponse({id: 'x'}), false
+    b RPCClient.isRPCResponse({id: 'x', result: 'x'}), true
+    b RPCClient.isRPCResponse({id: 'x', error: 'x'}), true
+    b RPCClient.isRPCResponse({id: 'x'}), false
 
   it 'isRPCCallbackResponse', ->
-    client = new RPCClient()
-    b client.isRPCCallbackResponse({callbackId: 'x', params: []}), true
-    b client.isRPCCallbackResponse({callbackId: 'x'}), false
+    b RPCClient.isRPCCallbackResponse({callbackId: 'x', params: []}), true
+    b RPCClient.isRPCCallbackResponse({callbackId: 'x'}), false
 
   it 'isRPCRequestAcknowledgement', ->
-    client = new RPCClient()
-    b client.isRPCRequestAcknowledgement({acknowledge: true}), true
-    b client.isRPCRequestAcknowledgement({acknowledge: false}), false
+    b RPCClient.isRPCRequestAcknowledgement({acknowledge: true}), true
+    b RPCClient.isRPCRequestAcknowledgement({acknowledge: false}), false
 
   it 'calls remote function', (done) ->
     client = new RPCClient({
       postMessage: (msg) ->
-        b client.isRPCRequest(JSON.parse(msg))
+        b RPCClient.isRPCRequest(JSON.parse(msg))
         done()
     })
     client.call 'add', [1, 2]
@@ -112,8 +110,8 @@ describe 'rpc-client', ->
     client = new RPCClient({
       postMessage: (msg) ->
         req = JSON.parse(msg)
-        b client.isRPCRequest(req)
-        b client.isRPCCallback req.params[1]
+        b RPCClient.isRPCRequest(req)
+        b RPCClient.isRPCCallback req.params[1]
         done()
     })
     client.call 'add', [1, (-> null)]
@@ -132,7 +130,7 @@ describe 'rpc-client', ->
     client = new RPCClient({
       postMessage: (msg) ->
         req = JSON.parse msg
-        client.resolve client.createRPCResponse({
+        client.resolve RPCClient.createRPCResponse({
           requestId: req.id
           result: 'z'
         })
@@ -145,11 +143,11 @@ describe 'rpc-client', ->
     client = new RPCClient({
       postMessage: (msg) ->
         req = JSON.parse msg
-        client.resolve client.createRPCRequestAcknowledgement({
+        client.resolve RPCClient.createRPCRequestAcknowledgement({
           requestId: req.id
         })
         setTimeout ->
-          client.resolve client.createRPCResponse({
+          client.resolve RPCClient.createRPCResponse({
             requestId: req.id
             result: 'z'
           })
@@ -163,7 +161,7 @@ describe 'rpc-client', ->
     client = new RPCClient({
       postMessage: (msg) ->
         req = JSON.parse msg
-        client.resolve client.createRPCRequestAcknowledgement({
+        client.resolve RPCClient.createRPCRequestAcknowledgement({
           requestId: req.id
         })
       timeout: 10
@@ -180,7 +178,7 @@ describe 'rpc-client', ->
       postMessage: (msg) ->
         req = JSON.parse msg
         rPCCallback = req.params[1]
-        client.resolve client.createRPCCallbackResponse({
+        client.resolve RPCClient.createRPCCallbackResponse({
           params: ['x']
           callbackId: rPCCallback.callbackId
         })

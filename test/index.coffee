@@ -8,13 +8,11 @@ b = require 'b-assert'
 PortalGun = require '../src/index'
 RPCClient = require '../src/rpc_client'
 
-client = new RPCClient()
-
 withParent = ({methods, origin}, fn) ->
   oldPost = window.parent?.postMessage
   window.parent?.postMessage = (msg) ->
     req = JSON.parse msg
-    b client.isRPCRequest req
+    b RPCClient.isRPCRequest req
     reply = (message) ->
       e = document.createEvent 'Event'
       e.initEvent 'message', true, true
@@ -25,10 +23,10 @@ withParent = ({methods, origin}, fn) ->
     # replace callback params with proxy functions
     params = []
     for param in req.params
-      if client.isRPCCallback param
+      if RPCClient.isRPCCallback param
         do (param) ->
           params.push (args...) ->
-            reply client.createRPCCallbackResponse {
+            reply RPCClient.createRPCCallbackResponse {
               params: args
               callbackId: param.callbackId
             }
@@ -38,14 +36,14 @@ withParent = ({methods, origin}, fn) ->
     new Promise (resolve) ->
       resolve methods[req.method](params...)
     .then (result) ->
-      reply client.createRPCResponse {
+      reply RPCClient.createRPCResponse {
         requestId: req.id
         result: result
       }
     .catch (err) ->
-      reply client.createRPCResponse {
+      reply RPCClient.createRPCResponse {
         requestId: req.id
-        rPCError: client.createRPCError {code: -1}
+        rPCError: RPCClient.createRPCError {code: -1}
       }
 
   new Promise (resolve) ->
@@ -60,7 +58,7 @@ withParent = ({methods, origin}, fn) ->
 childCall = (request, cb) ->
   e = document.createEvent 'Event'
   e.initEvent 'message', true, true
-  e.data = JSON.stringify client.createRPCRequest request
+  e.data = JSON.stringify RPCClient.createRPCRequest request
   e.source =
     postMessage: (msg) ->
       res = JSON.parse msg
@@ -277,11 +275,11 @@ describe 'portal-gun', ->
       portal.listen()
 
       childCall {method: 'ping', params: []}, (res) ->
-        if client.isRPCRequestAcknowledgement res
+        if RPCClient.isRPCRequestAcknowledgement res
           wasAcknoleged = true
         else
           b wasAcknoleged, true
-          b client.isRPCResponse res
+          b RPCClient.isRPCResponse res
           b res.result, 'pong'
           done()
 
@@ -293,7 +291,7 @@ describe 'portal-gun', ->
         new Promise -> null
 
       childCall {method: 'long', params: []}, (res) ->
-        if client.isRPCRequestAcknowledgement res
+        if RPCClient.isRPCRequestAcknowledgement res
           done()
 
     it 'sends request up', ->
@@ -308,11 +306,11 @@ describe 'portal-gun', ->
           portal.listen()
 
           childCall {method: 'abc', params: []}, (res) ->
-            if client.isRPCRequestAcknowledgement res
+            if RPCClient.isRPCRequestAcknowledgement res
               wasAcknoleged = true
             else
               b wasAcknoleged, true
-              b client.isRPCResponse res
+              b RPCClient.isRPCResponse res
               b res.result, 'xyz'
               resolve()
 
@@ -329,11 +327,11 @@ describe 'portal-gun', ->
           portal.on 'abc', 'zzz'
 
           childCall {method: 'abc', params: []}, (res) ->
-            if client.isRPCRequestAcknowledgement res
+            if RPCClient.isRPCRequestAcknowledgement res
               wasAcknoleged = true
             else
               b wasAcknoleged, true
-              b client.isRPCResponse res
+              b RPCClient.isRPCResponse res
               b res.error.code, -1
               b res.error.message, 'Error'
               resolve()
@@ -345,11 +343,11 @@ describe 'portal-gun', ->
       portal.on 'abc', -> 'xyz'
 
       childCall {method: 'abc', params: []}, (res) ->
-        if client.isRPCRequestAcknowledgement res
+        if RPCClient.isRPCRequestAcknowledgement res
           wasAcknoleged = true
         else
           b wasAcknoleged, true
-          b client.isRPCResponse res
+          b RPCClient.isRPCResponse res
           b res.result, 'xyz'
           done()
 
@@ -361,11 +359,11 @@ describe 'portal-gun', ->
         "hello #{param}"
 
       childCall {method: 'abc', params: ['world']}, (res) ->
-        if client.isRPCRequestAcknowledgement res
+        if RPCClient.isRPCRequestAcknowledgement res
           wasAcknoleged = true
         else
           b wasAcknoleged, true
-          b client.isRPCResponse res
+          b RPCClient.isRPCResponse res
           b res.result, 'hello world'
           done()
 
@@ -376,11 +374,11 @@ describe 'portal-gun', ->
       portal.on 'abc', -> Promise.resolve 'xyz'
 
       childCall {method: 'abc', params: []}, (res) ->
-        if client.isRPCRequestAcknowledgement res
+        if RPCClient.isRPCRequestAcknowledgement res
           wasAcknoleged = true
         else
           b wasAcknoleged, true
-          b client.isRPCResponse res
+          b RPCClient.isRPCResponse res
           b res.result, 'xyz'
           done()
 
@@ -395,10 +393,10 @@ describe 'portal-gun', ->
           , 10
 
       childCall {method: 'abc', params: []}, (res) ->
-        if client.isRPCRequestAcknowledgement res
+        if RPCClient.isRPCRequestAcknowledgement res
           wasAcknoleged = true
         else
           b wasAcknoleged, true
-          b client.isRPCResponse res
+          b RPCClient.isRPCResponse res
           b res.result, 'xyz'
           done()

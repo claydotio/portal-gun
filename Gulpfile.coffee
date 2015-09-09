@@ -21,11 +21,11 @@ paths =
 webpackDistConfig =
   module:
     postLoaders: [
-      { test: /\.coffee$/, loader: 'transform/cacheable?envify' }
+      {test: /\.coffee$/, loader: 'transform/cacheable?envify'}
     ]
     loaders: [
-      { test: /\.coffee$/, loader: 'coffee' }
-      { test: /\.json$/, loader: 'json' }
+      {test: /\.coffee$/, loader: 'coffee'}
+      {test: /\.json$/, loader: 'json'}
     ]
   resolve:
     extensions: ['.coffee', '.js', '.json', '']
@@ -49,11 +49,11 @@ gulp.task 'scripts:test', ->
     devtool: '#inline-source-map'
     module:
       postLoaders: [
-        { test: /\.coffee$/, loader: 'transform/cacheable?envify' }
+        {test: /\.coffee$/, loader: 'transform/cacheable?envify'}
       ]
       loaders: [
-        { test: /\.coffee$/, loader: 'coffee' }
-        { test: /\.json$/, loader: 'json' }
+        {test: /\.coffee$/, loader: 'coffee'}
+        {test: /\.json$/, loader: 'json'}
       ]
     plugins: [
       new RewirePlugin()

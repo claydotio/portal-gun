@@ -84,6 +84,37 @@ class PortalGun
       new Promise (resolve) ->
         resolve localMethod(method, params)
 
+  onRequest: (reply, request) =>
+    # replace callback params with proxy functions
+    params = []
+    for param in (request.params or [])
+      if RPCClient.isRPCCallback param
+        do (param) ->
+          params.push (args...) ->
+            reply RPCClient.createRPCCallbackResponse {
+              params: args
+              callbackId: param.callbackId
+            }
+      else
+        params.push param
+
+    # acknowledge request, prevent request timeout
+    reply RPCClient.createRPCRequestAcknowledgement {requestId: request.id}
+
+    @call request.method, params
+    .then (result) ->
+      reply RPCClient.createRPCResponse {
+        requestId: request.id
+        result: result
+      }
+    .catch (err) ->
+      reply RPCClient.createRPCResponse {
+        requestId: request.id
+        rPCError: RPCClient.createRPCError {
+          code: RPCClient.ERROR_CODES.DEFAULT
+        }
+      }
+
   onMessage: (e) =>
     reply = (message) ->
       e.source.postMessage JSON.stringify(message), '*'
@@ -95,38 +126,7 @@ class PortalGun
         throw new Error 'Non-portal message'
 
       if RPCClient.isRPCRequest message
-        method = message.method
-        reqParams = message.params or []
-        params = []
-
-        # replace callback params with proxy functions
-        for param in reqParams
-          if RPCClient.isRPCCallback param
-            do (param) ->
-              params.push (args...) ->
-                reply RPCClient.createRPCCallbackResponse {
-                  params: args
-                  callbackId: param.callbackId
-                }
-          else
-            params.push param
-
-        # acknowledge request, prevent request timeout
-        reply RPCClient.createRPCRequestAcknowledgement {requestId: message.id}
-
-        @call method, params
-        .then (result) ->
-          reply RPCClient.createRPCResponse {
-            requestId: message.id
-            result: result
-          }
-        .catch (err) ->
-          reply RPCClient.createRPCResponse {
-            requestId: message.id
-            rPCError: RPCClient.createRPCError {
-              code: RPCClient.ERROR_CODES.DEFAULT
-            }
-          }
+        @onRequest(reply, message)
       else if RPCClient.isRPCEntity message
         if isValidOrigin e.origin, @trusted, @allowSubdomains
           @client.resolve message

@@ -10,42 +10,46 @@ $ npm install portal-gun
 
 ## API
 
-`portal = require('portal-gun')`  
-`portal.up`  
-`portal.down`  
-`portal.call`  
-`portal.on`  
-
 ```coffee
-###
-# Bind global message event listener
+PortalGun = require 'portal-gun'
 
-@param {Object} [config]
-@param {Array<String>} config.trusted - trusted domains e.g.['clay.io']
-@param {Boolean} config.allowSubdomains - trust subdomains of trusted domain
-###
-up: (config) =>
-```
+portal = new PortalGun({
+  trusted: ['x.com']
+  allowSubdomains: true
+})
 
-```coffee
-# Remove global message event listener
-down: =>
+portal.listen()
+
+portal.on 'methodName', (what) -> "#{what}?"
+
+portal.call 'methodName', 'hello'
+.then (result) -> # 'hello?'
 ```
 
 ```coffee
 ###
-@param {String} method
-@param {*} params - Arrays will be deconstructed as multiple args
+# @param {Object} config
+# @param {Number} config.timeout - request timeout (ms)
+# @param {Array<String>|Null} config.trusted - trusted domains e.g. ['clay.io']
+# @param {Boolean} config.allowSubdomains - trust subdomains of trusted domain
 ###
-call: (method, params = []) =>
-```
+constructor: ({timeout, @trusted, @allowSubdomains} = {}) -> null
 
-```coffee
+# Binds global message listener
+# Must be called before .call()
+listen: =>
+
+###
+# @param {String} method
+# @param {...*} params
+# @returns Promise
+###
+call: (method, params...) =>
+
 ###
 # Register method to be called on child request, or local request fallback
-
-@param {String} method
-@param {Function} fn
+# @param {String} method
+# @param {Function} fn
 ###
 on: (method, fn) =>
 ```
@@ -58,6 +62,11 @@ npm test
 ```
 
 ## Changelog
+
+v0.2.0 -> v0.3.0
+  - new class api
+  - compatible with v0.2.0 RPC spec
+  - improved testing, stability, and timeout guarantees
 
 v0.1.x -> v0.2.0
 

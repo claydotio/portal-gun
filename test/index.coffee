@@ -96,6 +96,18 @@ describe 'portal-gun', ->
         .then (pong) ->
           b pong, 'pong'
 
+    it 'calls method with multiple parameters', ->
+      withParent {
+        methods:
+          ping: -> 'pong'
+          paramer: (one, two) -> [one, two]
+      }, ->
+        portal = new PortalGun()
+        portal.listen()
+        portal.call 'paramer', 'one', 'two'
+        .then (res) ->
+          b res, ['one', 'two']
+
     it 'recieves errors from parent frame', ->
       withParent {
         methods:

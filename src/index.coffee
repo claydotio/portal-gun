@@ -23,10 +23,9 @@ isValidOrigin = (origin, trusted, allowSubdomains) ->
 
 class PortalGun
   ###
-  # Bind global message event listener
   @param {Object} config
   @param {Number} config.timeout - request timeout (ms)
-  @param {Array<String>|Null} config.trusted - trusted domains e.g.['clay.io']
+  @param {Array<String>|Null} config.trusted - trusted domains e.g. ['clay.io']
   @param {Boolean} config.allowSubdomains - trust subdomains of trusted domain
   ###
   constructor: ({timeout, @trusted, @allowSubdomains} = {}) ->
@@ -44,6 +43,8 @@ class PortalGun
       ping: -> 'pong'
     }
 
+  # Binds global message listener
+  # Must be called before .call()
   listen: =>
     @isListening = true
     window.addEventListener 'message', @onMessage
@@ -51,16 +52,13 @@ class PortalGun
 
   ###
   @param {String} method
-  @param {*} params - Arrays will be deconstructed as multiple args
+  @param {...*} params
+  @returns Promise
   ###
-  call: (method, params = []) =>
+  call: (method, params...) =>
     unless @isListening
       return new Promise (resolve, reject) ->
         reject new Error 'Must call listen() before call()'
-
-    # params should always be an array
-    unless Object::toString.call(params) is '[object Array]'
-      params = [params]
 
     localMethod = (method, params) =>
       fn = @registeredMethods[method]
@@ -147,7 +145,6 @@ class PortalGun
 
   ###
   # Register method to be called on child request, or local request fallback
-
   @param {String} method
   @param {Function} fn
   ###

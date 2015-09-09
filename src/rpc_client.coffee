@@ -21,6 +21,7 @@
 ###
 
 Promise = window.Promise or require 'promiz'
+uuid = require 'uuid'
 
 errors = require './errors'
 
@@ -37,6 +38,7 @@ deferredFactory = ->
 
   return promise
 
+# FIXME: maybe make create and is* methods class methods?
 module.exports = class RPCClient
   constructor: ({@postMessage, @timeout} = {}) ->
     @timeout ?= REQUEST_TIMEOUT_MS
@@ -55,15 +57,15 @@ module.exports = class RPCClient
   @param {Array<*>} [props.params] - Functions are not allowed
   @returns RPCRequest
   ###
-  createRPCRequest: do (lastRequestId = 0) ->
-    ({method, params}) ->
-      for param in params
-        if typeof param is 'function'
-          throw new Error 'Functions are not allowed. Use RPCCallback instead.'
+  createRPCRequest: ({method, params}) ->
+    unless params?
+      throw new Error 'Must provide params'
 
-      lastRequestId += 1
-      id = String lastRequestId
-      return {_portal: true, id, method, params}
+    for param in params
+      if typeof param is 'function'
+        throw new Error 'Functions are not allowed. Use RPCCallback instead.'
+
+    return {_portal: true, id: uuid.v4(), method, params}
 
   ###
   @typedef {Object} RPCCallback
@@ -73,11 +75,8 @@ module.exports = class RPCClient
 
   @returns RPCCallback
   ###
-  createRPCCallback: do (lastCallbackId = 0) ->
-    ->
-      lastCallbackId += 1
-      id = String lastCallbackId
-      return {_portal: true, _portalGunCallback: true, callbackId: id}
+  createRPCCallback: ->
+    return {_portal: true, _portalGunCallback: true, callbackId: uuid.v4()}
 
   ###
   @typedef {Object} RPCCallbackResponse

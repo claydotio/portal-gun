@@ -3,335 +3,404 @@ require './polyfill'
 _ = require 'lodash'
 rewire = require 'rewire'
 Promise = require 'bluebird'
+# FIXME
 should = require('clay-chai').should()
+b = require 'b-assert'
 
-packageConfig = require '../package.json'
-portal = rewire '../src/index'
+PortalGun = require '../src/index'
+RPCClient = require '../src/rpc_client'
 
-TRUSTED_DOMAINS = ['clay.io', 'staging.wtf']
+client = new RPCClient()
 
-postRoutes = {}
+withParent = ({methods, origin}, fn) ->
+  oldPost = window.parent?.postMessage
+  window.parent?.postMessage = (msg) ->
+    req = JSON.parse msg
+    b client.isRPCRequest req
+    reply = (message) ->
+      e = document.createEvent 'Event'
+      e.initEvent 'message', true, true
+      e.origin = origin
+      e.data = JSON.stringify message
+      window.dispatchEvent e
 
-portal.__set__ 'window.parent.postMessage', (messageString, targetOrigin) ->
-  targetOrigin.should.be '*'
-  message = JSON.parse messageString
-  _.isString(message.id).should.be true
-  message._portal.should.be true
+    # replace callback params with proxy functions
+    params = []
+    for param in req.params
+      if client.isRPCCallback param
+        do (param) ->
+          params.push (args...) ->
+            reply client.createRPCCallbackResponse {
+              params: args
+              callbackId: param.callbackId
+            }
+      else
+        params.push param
 
-  postRoutes[message.method].should.exist
+    new Promise (resolve) ->
+      resolve methods[req.method](params...)
+    .then (result) ->
+      reply client.createRPCResponse {
+        requestId: req.id
+        result: result
+      }
+    .catch (err) ->
+      reply client.createRPCResponse {
+        requestId: req.id
+        rPCError: client.createRPCError {code: -1}
+      }
 
-  if postRoutes[message.method].timeout
-    return
+  new Promise (resolve) ->
+    resolve fn()
+  .then ->
+    window.parent?.postMessage = oldPost
+  .catch (err) ->
+    window.parent?.postMessage = oldPost
+    throw err
 
-  result = postRoutes[message.method].data
 
-  if typeof result is 'function'
-    result = result(message)
-
+childCall = (request, cb) ->
   e = document.createEvent 'Event'
   e.initEvent 'message', true, true
-
-  e.origin = postRoutes[message.method].origin or
-             ('http://' + TRUSTED_DOMAINS[0])
-  e.data = JSON.stringify _.defaults(
-    {id: message.id, _portal: true}
-    result
-  )
+  e.data = JSON.stringify client.createRPCRequest request
+  e.source =
+    postMessage: (msg) ->
+      res = JSON.parse msg
+      cb(res)
 
   window.dispatchEvent e
 
-dispatchEvent = (data) ->
-  new Promise (resolve, reject) ->
-    e = document.createEvent 'Event'
-    e.initEvent 'message', true, true
-
-    e.source =
-      postMessage: (messageString, targetOrigin) ->
-        targetOrigin.should.be '*'
-        message = JSON.parse messageString
-        message.id.should.be '1'
-        message._portal.should.be true
-
-        if message.error
-          reject message.error
-        if message.acknowledge
-          return
-        else
-          resolve message.result
-
-    e.origin = "http://#{TRUSTED_DOMAINS[0]}"
-    e.data = JSON.stringify _.defaults(
-      {id: '1', _portal: true}
-      data
-    )
-
-    window.dispatchEvent e
-
-routePost = (method, {origin, data, timeout}) ->
-  postRoutes[method] = {origin, data, timeout}
-
-routePost 'ping', data: {result: 'pong'}
 
 describe 'portal-gun', ->
-  describe 'up()/down()', ->
-    it 'comes up', (done) ->
-      listener = portal.__get__ 'window.addEventListener'
-
-      added = ->
-        portal.__set__ 'window.addEventListener', listener
-        done()
-
-      portal.__set__ 'window.addEventListener', ->
-        added()
-
-      portal.up()
-
-    it 'goes down', (done) ->
-      listener = portal.__get__ 'window.removeEventListener'
-
-      removed = ->
-        portal.__set__ 'window.removeEventListener', listener
-        done()
-
-      portal.__set__ 'window.removeEventListener', ->
-        removed()
-
-      portal.down()
+  describe 'listen()', ->
+    it 'listens', ->
+      withParent {
+        methods:
+          ping: -> 'pong'
+      }, ->
+        portal = new PortalGun()
+        portal.listen()
 
   describe 'call()', ->
-    before ->
-      portal.up trusted: TRUSTED_DOMAINS
+    it 'requires listening before calling', (done) ->
+      portal = new PortalGun()
+      portal.call 'ping'
+      .catch (err) ->
+        b err.message, 'Must call listen() before call()'
+        done()
 
-    it 'posts to parent frame', ->
-      routePost 'mirror',
-        data:
-          result: {test: true}
+    it 'calls method on parent frame', ->
+      withParent {
+        methods:
+          ping: -> 'pong'
+      }, ->
+        portal = new PortalGun()
+        portal.listen()
+        portal.call 'ping'
+        .then (pong) ->
+          b pong, 'pong'
 
-      portal.call 'mirror'
-      .then (user) ->
-        user.test.should.be true
-
+    it 'recieves errors from parent frame', ->
+      withParent {
+        methods:
+          ping: -> 'pong'
+          ding: -> throw new Error 'dong'
+      }, ->
+        new Promise (resolve) ->
+          portal = new PortalGun()
+          portal.listen()
+          portal.call 'ding'
+          .catch (err) ->
+            b err.message, 'Error'
+            resolve()
 
     # https://github.com/claydotio/portal-gun/issues/3
     it 'recieves false from parent frame', ->
-      routePost 'mirror',
-        data:
-          result: false
+      withParent {
+        methods:
+          ping: -> 'pong'
+          f: -> false
+      }, ->
+        portal = new PortalGun()
+        portal.listen()
+        portal.call 'f'
+        .then (f) ->
+          b f, false
 
-      portal.call 'mirror'
-      .then (res) ->
-        res.should.be false
+    it 'times out when no response from parent', ->
+      withParent {
+        methods:
+          ping: -> 'pong'
+          timeout: ->
+            new Promise -> null
+      }, ->
+        new Promise (resolve) ->
+          portal = new PortalGun({timeout: 10})
+          portal.listen()
+          portal.call 'timeout'
+          .catch (err) ->
+            b err.message, 'Message Timeout'
+            resolve()
 
-    it 'recieves errors', ->
-      routePost 'mirror',
-        data:
-          error: {message: 'abc'}
+    it 'calls method with callback', ->
+      withParent {
+        methods:
+          ping: -> 'pong'
+          cb: (fn) ->
+            fn('xxx')
+            null
+      }, ->
+        new Promise (resolve) ->
+          portal = new PortalGun()
+          portal.listen()
+          portal.call 'cb', (res) ->
+            b res, 'xxx'
+            resolve()
 
-      portal.call 'mirror'
-      .then ->
-        throw new Error 'Missing error'
-      ,(err) ->
-        err.message.should.be 'abc'
+    it 'calls method with callback with multiple params', ->
+      withParent {
+        methods:
+          ping: -> 'pong'
+          cb: (fn) ->
+            fn('xxx', 'yyy')
+            null
+      }, ->
+        portal = new PortalGun()
+        portal.listen()
+        portal.call 'cb', (xxx, yyy) ->
+          b xxx, 'xxx'
+          b yyy, 'yyy'
+          done()
 
-    # FIXME
-    # it 'times out', ->
-    #   portal.__with__({'REQUEST_TIMEOUT_MS': 1}) ->
-    #     routePost 'infinite.loop', timeout: true
-    #
-    #     portal.call 'infinite.loop'
-    #     .then ->
-    #       throw new Error 'Missing error'
-    #     , (err) ->
-    #       err.message.should.be 'Message Timeout'
-
-    it 'supports callbacks', (done) ->
-      routePost 'callme', {
-        data: (message) ->
-          message.params[0]._portalGunCallback.should.be true
-
-          setTimeout ->
-            dispatchEvent {
-              callbackId: message.params[0].callbackId
-              params: ['back']
-            }
-          , 10
-          return {result: 'noop'}
-      }
-
-      portal.call 'callme', (res) ->
-        res.should.be 'back'
-        done()
-      .then (res) ->
-        res.should.be 'noop'
-      .catch done
-
-
-    it 'supports callbacks with multiple params', (done) ->
-      routePost 'callmemany', {
-        data: (message) ->
-          message.params[0].should.be 'abc'
-          message.params[1]._portalGunCallback.should.be true
-
-          setTimeout ->
-            dispatchEvent {
-              callbackId: message.params[1].callbackId
-              params: ['abc']
-            }
-          , 10
-          return {result: 'noop'}
-      }
-
-      portal.call 'callmemany', ['abc', ((res) ->
-        res.should.be 'abc'
-        done()
-      )]
-      .then (res) ->
-        res.should.be 'noop'
-      .catch done
-
-  describe 'domain verification', ->
-    it 'Succeeds on valid domains', ->
-      portal.up trusted: TRUSTED_DOMAINS, allowSubdomains: false
-
+    it 'succeeds on valid domains', ->
       domains = [
-        "http://#{TRUSTED_DOMAINS[0]}/"
-        "https://#{TRUSTED_DOMAINS[0]}/"
-        "http://#{TRUSTED_DOMAINS[0]}"
-        "https://#{TRUSTED_DOMAINS[0]}"
+        'http://x.com/'
+        'https://x.com/'
+        'http://x.com'
+        'https://x.com'
+      ]
+      Promise.map domains, (domain) ->
+        withParent {
+          origin: domain
+          methods:
+            ping: -> 'pong'
+        }, ->
+          portal = new PortalGun({
+            trusted: ['x.com']
+          })
+          portal.listen()
+          portal.call 'ping'
+          .then (res) ->
+            b res, 'pong'
+
+    it 'succeeds on valid subdomains', ->
+      domains = [
+        'http://sub.x.com/'
+        'https://sub.x.com/'
+        'http://sub.x.com'
+        'https://sub.x.com'
+
+        'http://sub.sub.x.com/'
+        'https://sub.sub.x.com/'
+        'http://sub.sub.x.com'
+        'https://sub.sub.x.com'
       ]
 
       Promise.map domains, (domain) ->
-        routePost 'domain.test',
+        withParent {
           origin: domain
-          data:
-            result: {test: true}
+          methods:
+            ping: -> 'pong'
+        }, ->
+          portal = new PortalGun({
+            trusted: ['x.com']
+            allowSubdomains: true
+          })
+          portal.listen()
+          portal.call 'ping'
+          .then (res) ->
+            b res, 'pong'
 
-        portal.call 'domain.test'
-          .then (user) ->
-            user.test.should.be true
-
-    it 'Succeeds on valid subdomains', ->
-      portal.up trusted: TRUSTED_DOMAINS, allowSubdomains: true
-
+    it 'fails on invalid domains', ->
       domains = [
-        "http://sub.#{TRUSTED_DOMAINS[0]}/"
-        "https://sub.#{TRUSTED_DOMAINS[0]}/"
-        "http://sub.#{TRUSTED_DOMAINS[0]}"
-        "https://sub.#{TRUSTED_DOMAINS[0]}"
-
-        "http://sub.sub.#{TRUSTED_DOMAINS[0]}/"
-        "https://sub.sub.#{TRUSTED_DOMAINS[0]}/"
-        "http://sub.sub.#{TRUSTED_DOMAINS[0]}"
-        "https://sub.sub.#{TRUSTED_DOMAINS[0]}"
+        'http://evil.io/'
+        'http://evil.io/http://x.com/'
       ]
 
       Promise.map domains, (domain) ->
-        routePost 'domain.test',
+        withParent {
           origin: domain
-          data:
-            result: {test: true}
+          methods:
+            ping: -> 'pong'
+            abc: -> 'xyz'
+        }, ->
+          portal = new PortalGun({
+            trusted: ['x.com']
+          })
+          portal.listen()
+          portal.call 'abc'
+          .then ->
+            throw new Error 'Missing Error'
+          , (err) ->
+            b err.message, 'Invalid origin'
 
-        portal.call 'domain.test'
-        .then (user) ->
-          user.test.should.be true
 
-    # FIXME
-    # it 'Errors on invalid domains', ->
-    #   portal.up trusted: TRUSTED_DOMAINS, allowSubdomains: false
-    #
-    #   domains = [
-    #     'http://evil.io/'
-    #     'http://sub.evil.io/'
-    #     'http://sub.sub.evil.io/'
-    #     "http://evil.io/http://#{TRUSTED_DOMAINS[0]}/"
-    #
-    #     "http://sub.#{TRUSTED_DOMAINS[0]}/"
-    #   ]
-    #
-    #   Promise.map domains, (domain, i) ->
-    #     routePost "domain.test.#{i}",
-    #       origin: domain
-    #       data:
-    #         result: {test: true}
-    #
-    #     portal.call "domain.test.#{i}"
-    #     .then (res) ->
-    #       throw new Error 'Missing error'
-    #     , (err) ->
-    #       (err instanceof Error).should.be true
-    #       err.message.indexOf('Invalid domain').should.not.be -1
+    it 'fails on invalid subdomains', ->
+      domains = [
+        'http://sub.evil.io/'
+        'http://sub.sub.evil.io/'
 
-  describe 'requests', ->
-    before ->
-      portal.up()
+        'http://sub.x.com/'
+      ]
 
-    it 'handles ping', ->
-      dispatchEvent {method: 'ping'}
-      .then (result) ->
-        result.should.be 'pong'
+      Promise.map domains, (domain) ->
+        withParent {
+          origin: domain
+          methods:
+            ping: -> 'pong'
+            abc: -> 'xyz'
+        }, ->
+          portal = new PortalGun({
+            trusted: ['x.com']
+            allowSubdomains: false
+          })
+          portal.listen()
+          portal.call 'abc'
+          .then ->
+            throw new Error 'Missing Error'
+          , (err) ->
+            b err.message, 'Invalid origin'
 
-  describe 'request handlers', ->
-    before ->
-      portal.up()
+
+  describe 'on()', ->
+    it 'responds to ping', (done) ->
+      wasAcknoleged = false
+      portal = new PortalGun({timeout: 0})
+      portal.listen()
+
+      childCall {method: 'ping', params: []}, (res) ->
+        if client.isRPCRequestAcknowledgement res
+          wasAcknoleged = true
+        else
+          b wasAcknoleged, true
+          b client.isRPCResponse res
+          b res.result, 'pong'
+          done()
+
+    it 'acknowledges immediately', (done) ->
+      wasAcknoleged = false
+      portal = new PortalGun({timeout: 0})
+      portal.listen()
+      portal.on 'long', ->
+        new Promise -> null
+
+      childCall {method: 'long', params: []}, (res) ->
+        if client.isRPCRequestAcknowledgement res
+          done()
 
     it 'sends request up', ->
-      routePost 'ping',
-        data: (message) ->
-          result: message.params
+      withParent {
+        methods:
+          ping: -> 'pong'
+          abc: -> 'xyz'
+      }, ->
+        new Promise (resolve) ->
+          wasAcknoleged = false
+          portal = new PortalGun({timeout: 0})
+          portal.listen()
 
-      dispatchEvent {method: 'ping', params: [{hello: 'world'}]}
-      .then (result) ->
-        result.should.be [{hello: 'world'}]
-
-        routePost 'ping',
-          data:
-            result: 'pong'
+          childCall {method: 'abc', params: []}, (res) ->
+            if client.isRPCRequestAcknowledgement res
+              wasAcknoleged = true
+            else
+              b wasAcknoleged, true
+              b client.isRPCResponse res
+              b res.result, 'xyz'
+              resolve()
 
     it 'falls back on error', ->
-      routePost 'ping',
-        data:
-          error: {code: -1, message: 'Error'}
+      withParent {
+        methods:
+          ping: -> 'pong'
+          abc: -> throw new Error 'xxx'
+      }, ->
+        new Promise (resolve) ->
+          wasAcknoleged = false
+          portal = new PortalGun({timeout: 0})
+          portal.listen()
+          portal.on 'abc', 'zzz'
 
-      dispatchEvent {method: 'ping'}
-      .then (result) ->
-        result.should.be 'pong'
+          childCall {method: 'abc', params: []}, (res) ->
+            if client.isRPCRequestAcknowledgement res
+              wasAcknoleged = true
+            else
+              b wasAcknoleged, true
+              b client.isRPCResponse res
+              b res.error.code, -1
+              b res.error.message, 'Error'
+              resolve()
 
-        routePost 'ping',
-          data:
-            result: 'pong'
+    it 'registers basic functions', ->
+      wasAcknoleged = false
+      portal = new PortalGun({timeout: 0})
+      portal.listen()
+      portal.on 'abc', -> 'xyz'
 
-    describe 'on', ->
-      it 'registers basic functions', ->
-        portal.on 'abc', ->
-          return 'def'
+      childCall {method: 'abc', params: []}, (res) ->
+        if client.isRPCRequestAcknowledgement res
+          wasAcknoleged = true
+        else
+          b wasAcknoleged, true
+          b client.isRPCResponse res
+          b res.result, 'xyz'
+          done()
 
-        dispatchEvent {method: 'abc'}
-        .then (res) ->
-          res.should.be 'def'
+    it 'registers basic functions with parameters', ->
+      wasAcknoleged = false
+      portal = new PortalGun({timeout: 0})
+      portal.listen()
+      portal.on 'abc', (param) ->
+        "hello #{param}"
 
-      it 'registers basic functions with parameters', ->
-        portal.on 'add', (a, b) ->
-          return a + b
+      childCall {method: 'abc', params: ['world']}, (res) ->
+        if client.isRPCRequestAcknowledgement res
+          wasAcknoleged = true
+        else
+          b wasAcknoleged, true
+          b client.isRPCResponse res
+          b res.result, 'hello world'
+          done()
 
-        dispatchEvent {method: 'add', params: [1, 2]}
-        .then (res) ->
-          res.should.be 3
+    it 'registers promise returning functions', ->
+      wasAcknoleged = false
+      portal = new PortalGun({timeout: 0})
+      portal.listen()
+      portal.on 'abc', -> Promise.resolve 'xyz'
 
-      it 'registers promise returning functions', ->
-        portal.on 'def', ->
-          Promise.resolve 'abc'
+      childCall {method: 'abc', params: []}, (res) ->
+        if client.isRPCRequestAcknowledgement res
+          wasAcknoleged = true
+        else
+          b wasAcknoleged, true
+          b client.isRPCResponse res
+          b res.result, 'xyz'
+          done()
 
-        dispatchEvent {method: 'def'}
-        .then (res) ->
-          res.should.be 'abc'
+    it 'supports long-running requests', ->
+      wasAcknoleged = false
+      portal = new PortalGun({timeout: 0})
+      portal.listen()
+      portal.on 'abc', ->
+        new Promise (resolve) ->
+          setTimeout ->
+            resolve 'xyz'
+          , 10
 
-      it 'supports long-running requests', ->
-        portal.on 'long', ->
-          return new Promise (resolve) ->
-            setTimeout ->
-              resolve 'finally!'
-            , 90
-
-        dispatchEvent {method: 'long'}
-        .then (res) ->
-          res.should.be 'finally!'
+      childCall {method: 'abc', params: []}, (res) ->
+        if client.isRPCRequestAcknowledgement res
+          wasAcknoleged = true
+        else
+          b wasAcknoleged, true
+          b client.isRPCResponse res
+          b res.result, 'xyz'
+          done()

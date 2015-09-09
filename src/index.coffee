@@ -22,41 +22,41 @@ isValidOrigin = (origin, trusted, allowSubdomains) ->
   return false
 
 class PortalGun
-  constructor: ->
-    @config =
-      trusted: null
-      allowSubdomains: false
+  ###
+  # Bind global message event listener
+  @param {Object} config
+  @param {Number} config.timeout - request timeout (ms)
+  @param {Array<String>|Null} config.trusted - trusted domains e.g.['clay.io']
+  @param {Boolean} config.allowSubdomains - trust subdomains of trusted domain
+  ###
+  constructor: ({timeout, @trusted, @allowSubdomains} = {}) ->
+    timeout ?= null
+    @trusted ?= null
+    @allowSubdomains ?= false
+    @isListening = false
     @client = new RPCClient({
+      timeout: timeout
       postMessage: (msg, origin) ->
         window.parent?.postMessage msg, origin
     })
+    # All parents must respond to 'ping' with 'pong'
     @registeredMethods = {
       ping: -> 'pong'
     }
 
-  ###
-  # Bind global message event listener
-  @param {Object} config
-  @param {Array<String>|Null} config.trusted - trusted domains e.g.['clay.io']
-  @param {Boolean} config.allowSubdomains - trust subdomains of trusted domain
-  ###
-  up: ({trusted, allowSubdomains} = {}) =>
-    trusted ?= null
-    allowSubdomains ?= false
-    @config.trusted = trusted
-    @config.allowSubdomains = allowSubdomains
+  listen: =>
+    @isListening = true
     window.addEventListener 'message', @onMessage
     @validation = @client.call 'ping'
-
-  # Remove global message event listener
-  down: =>
-    window.removeEventListener 'message', @onMessage
 
   ###
   @param {String} method
   @param {*} params - Arrays will be deconstructed as multiple args
   ###
   call: (method, params = []) =>
+    unless @isListening
+      return new Promise (resolve, reject) ->
+        reject new Error 'Must call listen() before call()'
 
     # params should always be an array
     unless Object::toString.call(params) is '[object Array]'
@@ -124,12 +124,22 @@ class PortalGun
         .catch (err) =>
           reply @client.createRPCResponse {
             requestId: message.id
-            rPCError: rPCError
+            rPCError: @client.createRPCError {
+              code: errors.CODES.DEFAULT
+            }
           }
       else if @client.isRPCEntity message
-        if isValidOrigin e.origin, @config.trusted, @config.allowSubdomains
+        if isValidOrigin e.origin, @trusted, @allowSubdomains
           @client.resolve message
+        else if @client.isRPCResponse message
+          @client.resolve @client.createRPCResponse {
+            requestId: message.id
+            rPCError: @client.createRPCError {
+              code: errors.CODES.INVALID_ORIGIN
+            }
+          }
         else
+          # FIXME
           throw new Error 'invalid origin'
       else
         throw new Error 'Unknown RPCEntity type'
@@ -145,11 +155,4 @@ class PortalGun
   on: (method, fn) =>
     @registeredMethods[method] = fn
 
-
-portal = new PortalGun()
-module.exports = {
-  up: portal.up
-  down: portal.down
-  call: portal.call
-  on: portal.on
-}
+module.exports = PortalGun

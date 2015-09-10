@@ -5,33 +5,15 @@ RPCClient = require './rpc_client'
 IS_FRAMED = window.self isnt window.top
 HANDSHAKE_TIMEOUT_MS = 10 * 1000 # 10 seconds
 
-isValidOrigin = (origin, trusted, allowSubdomains) ->
-  unless trusted?
-    return true
-
-  for trust in trusted
-    regex = if allowSubdomains
-      new RegExp \
-        "^https?://(\\w+\\.)?(\\w+\\.)?#{trust.replace(/\./g, '\\.')}/?$"
-    else
-      new RegExp "^https?://#{trust.replace(/\./g, '\\.')}/?$"
-
-    if regex.test origin
-      return true
-
-  return false
-
 class PortalGun
   ###
   @param {Object} config
-  @param {Number} config.timeout - request timeout (ms)
-  @param {Array<String>|Null} config.trusted - trusted domains e.g. ['clay.io']
-  @param {Boolean} config.allowSubdomains - trust subdomains of trusted domain
+  @param {Number} [config.timeout=3000] - request timeout (ms)
+  @param {Function<Boolean>} config.isParentValidFn - restrict parent origin
   ###
-  constructor: ({timeout, @trusted, @allowSubdomains} = {}) ->
+  constructor: ({timeout, @isParentValidFn} = {}) ->
+    @isParentValidFn ?= -> true
     timeout ?= null
-    @trusted ?= null
-    @allowSubdomains ?= false
     @isListening = false
     @client = new RPCClient({
       timeout: timeout
@@ -127,7 +109,7 @@ class PortalGun
       if RPCClient.isRPCRequest message
         @onRequest(reply, message)
       else if RPCClient.isRPCEntity message
-        if isValidOrigin e.origin, @trusted, @allowSubdomains
+        if @isParentValidFn e.origin
           @client.resolve message
         else if RPCClient.isRPCResponse message
           @client.resolve RPCClient.createRPCResponse {

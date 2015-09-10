@@ -181,106 +181,47 @@ describe 'portal-gun', ->
           done()
 
     it 'succeeds on valid domains', ->
-      domains = [
-        'http://x.com/'
-        'https://x.com/'
-        'http://x.com'
-        'https://x.com'
-        'http://y.com'
-      ]
-      Promise.map domains, (domain) ->
-        withParent {
-          origin: domain
-          methods:
-            ping: -> 'pong'
-        }, ->
-          portal = new PortalGun({
-            trusted: ['x.com', 'y.com']
-          })
-          portal.listen()
-          portal.call 'ping'
-          .then (res) ->
-            b res, 'pong'
-
-    it 'succeeds on valid subdomains', ->
-      domains = [
-        'http://sub.x.com/'
-        'https://sub.x.com/'
-        'http://sub.x.com'
-        'https://sub.x.com'
-        'https://sub.y.com'
-
-        'http://sub.sub.x.com/'
-        'https://sub.sub.x.com/'
-        'http://sub.sub.x.com'
-        'https://sub.sub.x.com'
-      ]
-
-      Promise.map domains, (domain) ->
-        withParent {
-          origin: domain
-          methods:
-            ping: -> 'pong'
-        }, ->
-          portal = new PortalGun({
-            trusted: ['x.com', 'y.com']
-            allowSubdomains: true
-          })
-          portal.listen()
-          portal.call 'ping'
-          .then (res) ->
-            b res, 'pong'
+      withParent {
+        origin: 'abc'
+        methods:
+          ping: -> 'pong'
+          sensitive: -> 'secret'
+      }, ->
+        portal = new PortalGun({
+          isParentValidFn: (origin) ->
+            b origin, 'abc'
+            return true
+        })
+        portal.listen()
+        portal.call 'sensitive'
+        .then (res) ->
+          b res, 'secret'
 
     it 'fails on invalid domains', ->
-      domains = [
-        'http://evil.io/'
-        'http://evil.io/http://x.com/'
-      ]
-
-      Promise.map domains, (domain) ->
-        withParent {
-          origin: domain
-          methods:
-            ping: -> 'pong'
-            abc: -> 'xyz'
-        }, ->
-          portal = new PortalGun({
-            trusted: ['x.com']
-          })
-          portal.listen()
-          portal.call 'abc'
-          .then ->
-            throw new Error 'Missing Error'
-          , (err) ->
-            b err.message, 'Invalid origin'
-
-
-    it 'fails on invalid subdomains', ->
-      domains = [
-        'http://sub.evil.io/'
-        'http://sub.sub.evil.io/'
-
-        'http://sub.x.com/'
-      ]
-
-      Promise.map domains, (domain) ->
-        withParent {
-          origin: domain
-          methods:
-            ping: -> 'pong'
-            abc: -> 'xyz'
-        }, ->
-          portal = new PortalGun({
-            trusted: ['x.com']
-            allowSubdomains: false
-          })
-          portal.listen()
-          portal.call 'abc'
-          .then ->
-            throw new Error 'Missing Error'
-          , (err) ->
-            b err.message, 'Invalid origin'
-
+      withParent {
+        origin: 'abc'
+        methods:
+          ping: -> 'pong'
+          sensitive: -> 'xxx'
+      }, ->
+        portal = new PortalGun({
+          isParentValidFn: (origin) ->
+            if origin is 'abc'
+              return false
+            return true
+        })
+        portal.listen()
+        portal.on 'sensitive', -> 'secret'
+        portal.call 'sensitive'
+        .then (res) ->
+          b res, 'secret'
+          new Promise (resolve, reject) ->
+            portal.call 'missing'
+            .then reject
+            .catch (err) ->
+              b err.message, 'Invalid origin'
+              resolve()
+            .catch reject
 
   describe 'on()', ->
     it 'responds to ping', (done) ->

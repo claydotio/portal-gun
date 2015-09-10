@@ -14,8 +14,8 @@ $ npm install portal-gun
 PortalGun = require 'portal-gun'
 
 portal = new PortalGun({
-  trusted: ['x.com']
-  allowSubdomains: true
+  isParentValidFn: (origin) ->
+    return origin is 'http://x.com'
 })
 
 portal.listen()
@@ -29,11 +29,10 @@ portal.call 'methodName', 'hello'
 ```coffee
 ###
 # @param {Object} config
-# @param {Number} config.timeout - request timeout (ms)
-# @param {Array<String>|Null} config.trusted - trusted domains e.g. ['clay.io']
-# @param {Boolean} config.allowSubdomains - trust subdomains of trusted domain
+# @param {Number} [config.timeout=3000] - request timeout (ms)
+# @param {Function<Boolean>} config.isParentValidFn - restrict parent origin
 ###
-constructor: ({timeout, @trusted, @allowSubdomains} = {}) -> null
+constructor: ({timeout, @isParentValidFn} = {}) -> null
 
 # Binds global message listener
 # Must be called before .call()
@@ -62,6 +61,10 @@ npm test
 ```
 
 ## Changelog
+
+v0.3.0 -> v0.4.0
+  - removed `trusted` and `allowSubdomains` config
+  - added `isParentValidFn`
 
 v0.2.0 -> v0.3.0
   - new class api

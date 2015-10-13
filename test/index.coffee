@@ -76,12 +76,14 @@ describe 'portal-gun', ->
       }, ->
         portal = new PortalGun()
         portal.listen()
+        portal.close()
 
   describe 'call()', ->
     it 'requires listening before calling', (done) ->
       portal = new PortalGun()
       portal.call 'ping'
       .catch (err) ->
+        portal.close()
         b err.message, 'Must call listen() before call()'
         done()
 
@@ -94,6 +96,7 @@ describe 'portal-gun', ->
         portal.listen()
         portal.call 'ping'
         .then (pong) ->
+          portal.close()
           b pong, 'pong'
 
     it 'calls method with multiple parameters', ->
@@ -106,6 +109,7 @@ describe 'portal-gun', ->
         portal.listen()
         portal.call 'paramer', 'one', 'two'
         .then (res) ->
+          portal.close()
           b res, ['one', 'two']
 
     it 'recieves errors from parent frame', ->
@@ -119,6 +123,7 @@ describe 'portal-gun', ->
           portal.listen()
           portal.call 'ding'
           .catch (err) ->
+            portal.close()
             b err.message, 'Error'
             resolve()
 
@@ -133,6 +138,7 @@ describe 'portal-gun', ->
         portal.listen()
         portal.call 'f'
         .then (f) ->
+          portal.close()
           b f, false
 
     it 'times out when no response from parent', ->
@@ -147,6 +153,7 @@ describe 'portal-gun', ->
           portal.listen()
           portal.call 'timeout'
           .catch (err) ->
+            portal.close()
             b err.message, 'Message Timeout'
             resolve()
 
@@ -162,10 +169,11 @@ describe 'portal-gun', ->
           portal = new PortalGun()
           portal.listen()
           portal.call 'cb', (res) ->
+            portal.close()
             b res, 'xxx'
             resolve()
 
-    it 'calls method with callback with multiple params', ->
+    it 'calls method with callback with multiple params', (done) ->
       withParent {
         methods:
           ping: -> 'pong'
@@ -176,6 +184,7 @@ describe 'portal-gun', ->
         portal = new PortalGun()
         portal.listen()
         portal.call 'cb', (xxx, yyy) ->
+          portal.close()
           b xxx, 'xxx'
           b yyy, 'yyy'
           done()
@@ -195,6 +204,7 @@ describe 'portal-gun', ->
         portal.listen()
         portal.call 'sensitive'
         .then (res) ->
+          portal.close()
           b res, 'secret'
 
     it 'fails on invalid domains', ->
@@ -219,6 +229,7 @@ describe 'portal-gun', ->
             portal.call 'missing'
             .then reject
             .catch (err) ->
+              portal.close()
               b err.message, 'Invalid origin'
               resolve()
             .catch reject
@@ -233,10 +244,34 @@ describe 'portal-gun', ->
         if RPCClient.isRPCRequestAcknowledgement res
           wasAcknoleged = true
         else
+          portal.close()
           b wasAcknoleged, true
           b RPCClient.isRPCResponse res
           b res.result, 'pong'
           done()
+
+    # https://github.com/claydotio/portal-gun/issues/6
+    it 'passes params correctly', ->
+      withParent {
+        methods:
+          ping: -> 'pong'
+      }, ->
+        new Promise (resolve, reject) ->
+          wasAcknoleged = false
+          portal = new PortalGun({timeout: 0})
+          portal.listen()
+          portal.on 'parama', (a, b) -> [a, b]
+
+          childCall {method: 'parama', params: ['a', 'b']}, (res) ->
+            if RPCClient.isRPCRequestAcknowledgement res
+              wasAcknoleged = true
+            else
+              portal.close()
+              resolve {res, wasAcknoleged}
+        .then ({res, wasAcknoleged}) ->
+          b wasAcknoleged, true
+          b RPCClient.isRPCResponse res
+          b res.result, ['a', 'b']
 
     it 'acknowledges immediately', (done) ->
       wasAcknoleged = false
@@ -264,6 +299,7 @@ describe 'portal-gun', ->
             if RPCClient.isRPCRequestAcknowledgement res
               wasAcknoleged = true
             else
+              portal.close()
               b wasAcknoleged, true
               b RPCClient.isRPCResponse res
               b res.result, 'xyz'
@@ -285,6 +321,7 @@ describe 'portal-gun', ->
             if RPCClient.isRPCRequestAcknowledgement res
               wasAcknoleged = true
             else
+              portal.close()
               b wasAcknoleged, true
               b RPCClient.isRPCResponse res
               b res.error.code, -1
@@ -314,6 +351,7 @@ describe 'portal-gun', ->
         "hello #{param}"
 
       childCall {method: 'abc', params: ['world']}, (res) ->
+        portal.close()
         if RPCClient.isRPCRequestAcknowledgement res
           wasAcknoleged = true
         else
@@ -332,6 +370,7 @@ describe 'portal-gun', ->
         if RPCClient.isRPCRequestAcknowledgement res
           wasAcknoleged = true
         else
+          portal.close()
           b wasAcknoleged, true
           b RPCClient.isRPCResponse res
           b res.result, 'xyz'
@@ -351,6 +390,7 @@ describe 'portal-gun', ->
         if RPCClient.isRPCRequestAcknowledgement res
           wasAcknoleged = true
         else
+          portal.close()
           b wasAcknoleged, true
           b RPCClient.isRPCResponse res
           b res.result, 'xyz'

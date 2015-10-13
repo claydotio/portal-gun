@@ -32,6 +32,10 @@ class PortalGun
     window.addEventListener 'message', @onMessage
     @validation = @client.call 'ping', null, {timeout: HANDSHAKE_TIMEOUT_MS}
 
+  close: =>
+    @isListening = true
+    window.removeEventListener 'message', @onMessage
+
   ###
   @param {String} method
   @param {...*} params
@@ -82,7 +86,7 @@ class PortalGun
     # acknowledge request, prevent request timeout
     reply RPCClient.createRPCRequestAcknowledgement {requestId: request.id}
 
-    @call request.method, params
+    @call request.method, params...
     .then (result) ->
       reply RPCClient.createRPCResponse {
         requestId: request.id

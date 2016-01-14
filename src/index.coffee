@@ -2,7 +2,6 @@ Promise = window.Promise or require 'promiz'
 
 RPCClient = require './rpc_client'
 
-IS_FRAMED = window.self isnt window.top
 HANDSHAKE_TIMEOUT_MS = 10 * 1000 # 10 seconds
 
 class PortalGun
@@ -15,15 +14,22 @@ class PortalGun
     @isParentValidFn ?= -> true
     timeout ?= null
     @isListening = false
+    @isFramed = window.self isnt window.top
+    @parent = window.parent
+
     @client = new RPCClient({
       timeout: timeout
-      postMessage: (msg, origin) ->
-        window.parent?.postMessage msg, origin
+      postMessage: (msg, origin) =>
+        @parent?.postMessage msg, origin
     })
     # All parents must respond to 'ping' with 'pong'
     @registeredMethods = {
       ping: -> 'pong'
     }
+
+  setParent: (parent) =>
+    @parent = parent
+    @isFramed = true
 
   # Binds global message listener
   # Must be called before .call()
@@ -52,7 +58,7 @@ class PortalGun
         throw new Error 'Method not found'
       return fn.apply null, params
 
-    if IS_FRAMED
+    if @isFramed
       frameError = null
       @validation
       .then =>

@@ -2,7 +2,7 @@ Promise = window.Promise or require 'promiz'
 
 RPCClient = require './rpc_client'
 
-HANDSHAKE_TIMEOUT_MS = 10 * 1000 # 10 seconds
+DEFAULT_HANDSHAKE_TIMEOUT_MS = 10 * 1000 # 10 seconds
 
 class PortalGun
   ###
@@ -10,9 +10,10 @@ class PortalGun
   @param {Number} [config.timeout=3000] - request timeout (ms)
   @param {Function<Boolean>} config.isParentValidFn - restrict parent origin
   ###
-  constructor: ({timeout, @isParentValidFn} = {}) ->
+  constructor: ({timeout, @handshakeTimeout, @isParentValidFn} = {}) ->
     @isParentValidFn ?= -> true
     timeout ?= null
+    @handshakeTimeout ?= DEFAULT_HANDSHAKE_TIMEOUT_MS
     @isListening = false
     @isFramed = window.self isnt window.top
     @parent = window.parent
@@ -36,7 +37,7 @@ class PortalGun
   listen: =>
     @isListening = true
     window.addEventListener 'message', @onMessage
-    @validation = @client.call 'ping', null, {timeout: HANDSHAKE_TIMEOUT_MS}
+    @validation = @client.call 'ping', null, {timeout: @handshakeTimeout}
 
   close: =>
     @isListening = true

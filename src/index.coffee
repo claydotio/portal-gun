@@ -1,8 +1,10 @@
-Promise = window.Promise or require 'promiz'
+Promise = if Promise? then Promise else require 'promiz'
 
 RPCClient = require './rpc_client'
 
 DEFAULT_HANDSHAKE_TIMEOUT_MS = 10 * 1000 # 10 seconds
+
+selfWindow = if window? then window else self
 
 class PortalGun
   ###
@@ -15,14 +17,26 @@ class PortalGun
     timeout ?= null
     @handshakeTimeout ?= DEFAULT_HANDSHAKE_TIMEOUT_MS
     @isListening = false
-    @isFramed = window.self isnt window.top
-    @parent = window.parent
+    @hasParent = window? and window.self isnt window.top
+    @parent = window?.parent
 
     @client = new RPCClient({
       timeout: timeout
       postMessage: (msg, origin) =>
         @parent?.postMessage msg, origin
     })
+
+    if navigator.serviceWorker
+      @sw = new RPCClient({
+        timeout: timeout
+        postMessage: (msg, origin) =>
+          swMessageChannel = new MessageChannel()
+          swMessageChannel?.port1.onmessage = (e) =>
+            @onMessage e, {isServiceWorker: true}
+          navigator.serviceWorker.controller?.postMessage(
+            msg, [swMessageChannel.port2]
+          )
+      })
     # All parents must respond to 'ping' with 'pong'
     @registeredMethods = {
       ping: -> 'pong'
@@ -30,18 +44,18 @@ class PortalGun
 
   setParent: (parent) =>
     @parent = parent
-    @isFramed = true
+    @hasParent = true
 
   # Binds global message listener
   # Must be called before .call()
   listen: =>
     @isListening = true
-    window.addEventListener 'message', @onMessage
+    selfWindow.addEventListener 'message', @onMessage
     @validation = @client.call 'ping', null, {timeout: @handshakeTimeout}
 
   close: =>
     @isListening = true
-    window.removeEventListener 'message', @onMessage
+    selfWindow.removeEventListener 'message', @onMessage
 
   ###
   @param {String} method
@@ -59,22 +73,32 @@ class PortalGun
         throw new Error 'Method not found'
       return fn.apply null, params
 
-    if @isFramed
-      frameError = null
+    if @hasParent
+      parentError = null
       @validation
       .then =>
         @client.call method, params
+      .catch (err) =>
+        parentError = err
+        if @sw
+          @sw.call method, params
+          .catch ->
+            return localMethod method, params
+        else
+          return localMethod method, params
       .catch (err) ->
-        frameError = err
-        return localMethod method, params
-      .catch (err) ->
-        if err.message is 'Method not found' and frameError isnt null
-          throw frameError
+        if err.message is 'Method not found' and parentError isnt null
+          throw parentError
         else
           throw err
     else
-      new Promise (resolve) ->
-        resolve localMethod(method, params)
+      new Promise (resolve) =>
+        if @sw
+          resolve @sw.call method, params
+          .catch (err) ->
+            return localMethod method, params
+        else
+          resolve localMethod(method, params)
 
   onRequest: (reply, request) =>
     # replace callback params with proxy functions
@@ -107,9 +131,12 @@ class PortalGun
         }
       }
 
-  onMessage: (e) =>
+  onMessage: (e, {isServiceWorker} = {}) =>
     reply = (message) ->
-      e.source.postMessage JSON.stringify(message), '*'
+      if window?
+        e.source.postMessage JSON.stringify(message), '*'
+      else
+        e.ports[0].postMessage JSON.stringify message
 
     try # silent
       message = if typeof e.data is 'string' then JSON.parse(e.data) else e.data
@@ -121,9 +148,11 @@ class PortalGun
         @onRequest(reply, message)
       else if RPCClient.isRPCEntity message
         if @isParentValidFn e.origin
-          @client.resolve message
+          rpc = if isServiceWorker then @sw else @client
+          rpc.resolve message
         else if RPCClient.isRPCResponse message
-          @client.resolve RPCClient.createRPCResponse {
+          rpc = if isServiceWorker then @sw else @client
+          rpc.resolve RPCClient.createRPCResponse {
             requestId: message.id
             rPCError: RPCClient.createRPCError {
               code: RPCClient.ERROR_CODES.INVALID_ORIGIN

@@ -20,7 +20,7 @@
 # with RPCCallback which should be used to emit callback responses
 ###
 
-Promise = window.Promise or require 'promiz'
+Promise = if Promise? then Promise else require 'promiz'
 uuid = require 'uuid'
 
 ERROR_CODES =
@@ -193,7 +193,7 @@ module.exports = class RPCClient
       deferred.reject err
       return deferred
 
-    window.setTimeout =>
+    setTimeout =>
       unless @pendingRequests[request.id].isAcknowledged
         deferred.reject new Error 'Message Timeout'
     , timeout

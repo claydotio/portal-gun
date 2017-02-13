@@ -94,9 +94,11 @@ class PortalGun
     else
       new Promise (resolve) =>
         if @sw
-          resolve @sw.call method, params
-          .catch (err) ->
-            return localMethod method, params
+          resolve(
+            @sw.call(method, params)
+            .catch (err) ->
+              return localMethod method, params
+          )
         else
           resolve localMethod(method, params)
 

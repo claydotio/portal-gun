@@ -103,7 +103,7 @@ class PortalGun
     @ready.then =>
       if @hasParent
         parentError = null
-        @validation
+        @clientValidation
         .then =>
           if not @isLegacy and @parentsRegisteredMethods.indexOf(method) is -1
             return localMethod method, params

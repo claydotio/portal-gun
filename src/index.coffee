@@ -29,17 +29,18 @@ class PortalGun
 
     if navigator.serviceWorker
       # only use service workers if current page has one
-      @ready = navigator.serviceWorker.getRegistrations()
-      .catch -> []
-      .then (registrations) =>
-        if registrations.length
+      @ready = navigator.serviceWorker.ready
+      .catch -> null
+      .then (registration) =>
+        worker = registration?.active
+        if worker
           @sw = new RPCClient({
             timeout: timeout
             postMessage: (msg, origin) =>
               swMessageChannel = new MessageChannel()
               swMessageChannel?.port1.onmessage = (e) =>
                 @onMessage e, {isServiceWorker: true}
-              navigator.serviceWorker.controller?.postMessage(
+              worker.postMessage(
                 msg, [swMessageChannel.port2]
               )
           })
@@ -66,7 +67,7 @@ class PortalGun
     .then (registeredMethods) =>
       if registeredMethods is 'pong'
         @isLegacy = true
-      else
+      else if @hasParent
         @parentsRegisteredMethods = @parentsRegisteredMethods.concat(
           registeredMethods
         )

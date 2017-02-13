@@ -27,16 +27,23 @@ class PortalGun
     })
 
     if navigator.serviceWorker
-      @sw = new RPCClient({
-        timeout: timeout
-        postMessage: (msg, origin) =>
-          swMessageChannel = new MessageChannel()
-          swMessageChannel?.port1.onmessage = (e) =>
-            @onMessage e, {isServiceWorker: true}
-          navigator.serviceWorker.controller?.postMessage(
-            msg, [swMessageChannel.port2]
-          )
-      })
+      # only use service workers if current page has one
+      @ready = navigator.serviceWorker.getRegistrations()
+      .then (registrations) =>
+        if registrations.length
+          @sw = new RPCClient({
+            timeout: timeout
+            postMessage: (msg, origin) =>
+              swMessageChannel = new MessageChannel()
+              swMessageChannel?.port1.onmessage = (e) =>
+                @onMessage e, {isServiceWorker: true}
+              navigator.serviceWorker.controller?.postMessage(
+                msg, [swMessageChannel.port2]
+              )
+          })
+    else
+      @ready = Promise.resolve true
+
     # All parents must respond to 'ping' with 'pong'
     @registeredMethods = {
       ping: -> 'pong'
@@ -73,34 +80,35 @@ class PortalGun
         throw new Error 'Method not found'
       return fn.apply null, params
 
-    if @hasParent
-      parentError = null
-      @validation
-      .then =>
-        @client.call method, params
-      .catch (err) =>
-        parentError = err
-        if @sw
-          @sw.call method, params
-          .catch ->
-            return localMethod method, params
-        else
-          return localMethod method, params
-      .catch (err) ->
-        if err.message is 'Method not found' and parentError isnt null
-          throw parentError
-        else
-          throw err
-    else
-      new Promise (resolve) =>
-        if @sw
-          resolve(
-            @sw.call(method, params)
-            .catch (err) ->
+    @ready.then =>
+      if @hasParent
+        parentError = null
+        @validation
+        .then =>
+          @client.call method, params
+        .catch (err) =>
+          parentError = err
+          if @sw
+            @sw.call method, params
+            .catch ->
               return localMethod method, params
-          )
-        else
-          resolve localMethod(method, params)
+          else
+            return localMethod method, params
+        .catch (err) ->
+          if err.message is 'Method not found' and parentError isnt null
+            throw parentError
+          else
+            throw err
+      else
+        new Promise (resolve) =>
+          if @sw
+            resolve(
+              @sw.call(method, params)
+              .catch (err) ->
+                return localMethod method, params
+            )
+          else
+            resolve localMethod(method, params)
 
   onRequest: (reply, request) =>
     # replace callback params with proxy functions

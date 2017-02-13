@@ -17,6 +17,7 @@ class PortalGun
     timeout ?= null
     @handshakeTimeout ?= DEFAULT_HANDSHAKE_TIMEOUT_MS
     @isListening = false
+    @isLegacy = false # TODO: remove when native apps are updated
     @hasParent = window? and window.self isnt window.top
     @parent = window?.parent
 
@@ -29,6 +30,7 @@ class PortalGun
     if navigator.serviceWorker
       # only use service workers if current page has one
       @ready = navigator.serviceWorker.getRegistrations()
+      .catch -> []
       .then (registrations) =>
         if registrations.length
           @sw = new RPCClient({
@@ -44,10 +46,11 @@ class PortalGun
     else
       @ready = Promise.resolve true
 
-    # All parents must respond to 'ping' with 'pong'
+    # All parents must respond to 'ping' with @registeredMethods
     @registeredMethods = {
-      ping: -> 'pong'
+      ping: => Object.keys @registeredMethods
     }
+    @parentsRegisteredMethods = []
 
   setParent: (parent) =>
     @parent = parent
@@ -58,7 +61,22 @@ class PortalGun
   listen: =>
     @isListening = true
     selfWindow.addEventListener 'message', @onMessage
-    @validation = @client.call 'ping', null, {timeout: @handshakeTimeout}
+
+    @clientValidation = @client.call 'ping', null, {timeout: @handshakeTimeout}
+    .then (registeredMethods) =>
+      if registeredMethods is 'pong'
+        @isLegacy = true
+      else
+        @parentsRegisteredMethods = @parentsRegisteredMethods.concat(
+          registeredMethods
+        )
+
+    @swValidation = @ready.then =>
+      @sw.call 'ping', null, {timeout: @handshakeTimeout}
+    .then (registeredMethods) =>
+      @parentsRegisteredMethods = @parentsRegisteredMethods.concat(
+        registeredMethods
+      )
 
   close: =>
     @isListening = true
@@ -80,32 +98,40 @@ class PortalGun
         throw new Error 'Method not found'
       return fn.apply null, params
 
+    # TODO: clean this up
     @ready.then =>
       if @hasParent
         parentError = null
         @validation
         .then =>
-          @client.call method, params
-        .catch (err) =>
-          parentError = err
-          if @sw
-            @sw.call method, params
-            .catch ->
-              return localMethod method, params
-          else
+          if not @isLegacy and @parentsRegisteredMethods.indexOf(method) is -1
             return localMethod method, params
-        .catch (err) ->
-          if err.message is 'Method not found' and parentError isnt null
-            throw parentError
           else
-            throw err
+            @client.call method, params
+            .catch (err) =>
+              parentError = err
+              if @sw
+                @sw.call method, params
+                .catch ->
+                  return localMethod method, params
+              else
+                return localMethod method, params
+            .catch (err) ->
+              if err.message is 'Method not found' and parentError isnt null
+                throw parentError
+              else
+                throw err
       else
         new Promise (resolve) =>
           if @sw
             resolve(
-              @sw.call(method, params)
-              .catch (err) ->
-                return localMethod method, params
+              @swValidation.then =>
+                if @parentsRegisteredMethods.indexOf(method) is -1
+                  return localMethod method, params
+                else
+                  @sw.call(method, params)
+                  .catch (err) ->
+                    return localMethod method, params
             )
           else
             resolve localMethod(method, params)

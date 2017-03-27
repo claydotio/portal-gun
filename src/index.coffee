@@ -27,7 +27,7 @@ class PortalGun
         @parent?.postMessage msg, origin
     })
 
-    if navigator.serviceWorker
+    if navigator.serviceWorker and window.location.protocol isnt 'http:'
       # only use service workers if current page has one
       @ready = navigator.serviceWorker.ready
       .catch -> null

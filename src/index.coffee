@@ -12,7 +12,7 @@ class PortalGun
   @param {Number} [config.timeout=3000] - request timeout (ms)
   @param {Function<Boolean>} config.isParentValidFn - restrict parent origin
   ###
-  constructor: ({timeout, @handshakeTimeout, @isParentValidFn} = {}) ->
+  constructor: ({timeout, @handshakeTimeout, @isParentValidFn, useSw} = {}) ->
     @isParentValidFn ?= -> true
     timeout ?= null
     @handshakeTimeout ?= DEFAULT_HANDSHAKE_TIMEOUT_MS
@@ -27,7 +27,9 @@ class PortalGun
         @parent?.postMessage msg, origin
     })
 
-    if navigator.serviceWorker and window.location.protocol isnt 'http:'
+    useSw ?= navigator.serviceWorker and window.location.protocol isnt 'http:'
+
+    if useSw
       # only use service workers if current page has one
       @ready = navigator.serviceWorker.ready
       .catch -> null
@@ -65,6 +67,7 @@ class PortalGun
 
     @clientValidation = @client.call 'ping', null, {timeout: @handshakeTimeout}
     .then (registeredMethods) =>
+      console.log 'got reg', registeredMethods
       if registeredMethods is 'pong'
         @isLegacy = true
       else if @hasParent

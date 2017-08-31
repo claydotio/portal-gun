@@ -168,6 +168,7 @@ class PortalGun
         requestId: request.id
         rPCError: RPCClient.createRPCError {
           code: RPCClient.ERROR_CODES.DEFAULT
+          data: err
         }
       }
 

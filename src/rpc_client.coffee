@@ -226,7 +226,7 @@ module.exports = class RPCClient
 
     {result, error} = rPCResponse
     if error?
-      request.reject new Error error.message
+      request.reject error.data or new Error error.message
     else if result?
       request.resolve result
     else

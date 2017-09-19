@@ -112,10 +112,24 @@ class PortalGun
             return localMethod method, params
           else
             @client.call method, params
+            .then (result) ->
+              # need to send back methods for all parent frames
+              if method is 'ping'
+                localResult = localMethod method, params
+                (result or []).concat localResult
+              else
+                result
             .catch (err) =>
               parentError = err
               if @sw
                 @sw.call method, params
+                .then (result) ->
+                  # need to send back methods for all parent frames
+                  if method is 'ping'
+                    localResult = localMethod method, params
+                    (result or []).concat localResult
+                  else
+                    result
                 .catch ->
                   return localMethod method, params
               else

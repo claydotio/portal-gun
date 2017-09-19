@@ -148,6 +148,13 @@ class PortalGun
                   return localMethod method, params
                 else
                   @sw.call(method, params)
+                  .then (result) ->
+                    # need to send back methods for all parent frames
+                    if method is 'ping'
+                      localResult = localMethod method, params
+                      (result or []).concat localResult
+                    else
+                      result
                   .catch (err) ->
                     return localMethod method, params
             )
@@ -189,7 +196,7 @@ class PortalGun
   onMessage: (e, {isServiceWorker} = {}) =>
     reply = (message) ->
       if window?
-        e.source.postMessage JSON.stringify(message), '*'
+        e.source?.postMessage JSON.stringify(message), '*'
       else
         e.ports[0].postMessage JSON.stringify message
 

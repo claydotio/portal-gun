@@ -1,4 +1,6 @@
 Promise = if Promise? then Promise else require 'promiz'
+_map = require 'lodash/map'
+_isEmpty = require 'lodash/isEmpty'
 
 RPCClient = require './rpc_client'
 
@@ -18,13 +20,23 @@ class PortalGun
     @handshakeTimeout ?= DEFAULT_HANDSHAKE_TIMEOUT_MS
     @isListening = false
     @isLegacy = false # TODO: remove when native apps are updated
-    @hasParent = window? and window.self isnt window.top
+    isInAppBrowser = window._portalIsInAppBrowser
+    @hasParent = (window? and window.self isnt window.top) or isInAppBrowser
     @parent = window?.parent
 
     @client = new RPCClient({
       timeout: timeout
       postMessage: (msg, origin) =>
-        @parent?.postMessage msg, origin
+        if isInAppBrowser
+          queue = try
+            JSON.parse localStorage['portal:queue']
+          catch
+            null
+          queue ?= []
+          queue.push msg
+          localStorage['portal:queue'] = JSON.stringify queue
+        else
+          @parent?.postMessage msg, origin
     })
 
     useSw ?= navigator.serviceWorker and window.location.protocol isnt 'http:'
@@ -59,11 +71,57 @@ class PortalGun
     @parent = parent
     @hasParent = true
 
+  setInAppBrowserWindow: (@iabWindow, callback) =>
+    # can't use postMessage, so this hacky executeScript works
+    @iabWindow.addEventListener 'loadstart', =>
+      @iabWindow.executeScript {
+        code: "window._portalIsInAppBrowser = true;
+              localStorage.getItem('portal:queue');"
+      }
+      clearInterval @iabInterval
+      @iabInterval = setInterval =>
+        @iabWindow.executeScript {
+          code: "localStorage.getItem('portal:queue');"
+        }, (values) =>
+          try
+            values = JSON.parse values?[0]
+            unless _isEmpty values
+              @iabWindow.executeScript {
+                code: "localStorage.setItem('portal:queue', '[]')"
+              }
+            _map values, callback
+          catch err
+            console.log err, values
+      , 100
+    @iabWindow.addEventListener 'exit', =>
+      clearInterval @iabInterval
+
+  replyInAppBrowserWindow: (data) =>
+    @iabWindow.executeScript {
+      code: "if(window._portalOnMessage) window._portalOnMessage('#{data}')"
+    }
+
+  onMessageInAppBrowserWindow: (data) =>
+    @onMessage {
+      data: data
+      source:
+        postMessage: (data) =>
+          # needs to be defined in native
+          @call 'browser.reply', {data}
+    }
+
   # Binds global message listener
   # Must be called before .call()
   listen: =>
     @isListening = true
     selfWindow.addEventListener 'message', @onMessage
+
+    # set via win.executeScript in cordova
+    window._portalOnMessage = (eStr) =>
+      @onMessage {
+        debug: true
+        data: JSON.parse eStr
+      }
 
     @clientValidation = @client.call 'ping', null, {timeout: @handshakeTimeout}
     .then (registeredMethods) =>

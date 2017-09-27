@@ -20,7 +20,10 @@ class PortalGun
     @handshakeTimeout ?= DEFAULT_HANDSHAKE_TIMEOUT_MS
     @isListening = false
     @isLegacy = false # TODO: remove when native apps are updated
-    isInAppBrowser = window._portalIsInAppBrowser
+    # window?._portalIsInAppBrowser is set by native app. on iOS it isn't set
+    # soon enough, so we rely on userAgent
+    isInAppBrowser = window?._portalIsInAppBrowser or
+                      navigator.userAgent.indexOf('/InAppBrowser') isnt -1
     @hasParent = (window? and window.self isnt window.top) or isInAppBrowser
     @parent = window?.parent
 
@@ -75,8 +78,7 @@ class PortalGun
     # can't use postMessage, so this hacky executeScript works
     @iabWindow.addEventListener 'loadstart', =>
       @iabWindow.executeScript {
-        code: "window._portalIsInAppBrowser = true;
-              localStorage.getItem('portal:queue');"
+        code: 'window._portalIsInAppBrowser = true;'
       }
       clearInterval @iabInterval
       @iabInterval = setInterval =>
@@ -117,7 +119,7 @@ class PortalGun
     selfWindow.addEventListener 'message', @onMessage
 
     # set via win.executeScript in cordova
-    window._portalOnMessage = (eStr) =>
+    window?._portalOnMessage = (eStr) =>
       @onMessage {
         debug: true
         data: JSON.parse eStr

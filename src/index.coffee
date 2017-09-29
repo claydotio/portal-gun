@@ -122,7 +122,11 @@ class PortalGun
     window?._portalOnMessage = (eStr) =>
       @onMessage {
         debug: true
-        data: JSON.parse eStr
+        data: try
+          JSON.parse eStr
+        catch
+          console.log 'error parsing', eStr
+          null
       }
 
     @clientValidation = @client.call 'ping', null, {timeout: @handshakeTimeout}

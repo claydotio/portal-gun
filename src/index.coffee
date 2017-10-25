@@ -99,8 +99,12 @@ class PortalGun
       clearInterval @iabInterval
 
   replyInAppBrowserWindow: (data) =>
+    escapedData = data.replace(/'/g, "\\'")
     @iabWindow.executeScript {
-      code: "if(window._portalOnMessage) window._portalOnMessage('#{data}')"
+      code: "
+      if(window._portalOnMessage)
+        window._portalOnMessage('#{escapedData}')
+      "
     }
 
   onMessageInAppBrowserWindow: (data) =>

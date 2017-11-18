@@ -4,7 +4,8 @@ _isEmpty = require 'lodash/isEmpty'
 
 RPCClient = require './rpc_client'
 
-DEFAULT_HANDSHAKE_TIMEOUT_MS = 10 * 1000 # 10 seconds
+DEFAULT_HANDSHAKE_TIMEOUT_MS = 10000 # 10 seconds
+SW_CONNECT_TIMEOUT_MS = 3000 # 3s
 
 selfWindow = if window? then window else self
 
@@ -43,24 +44,28 @@ class PortalGun
     })
 
     useSw ?= navigator.serviceWorker and window.location.protocol isnt 'http:'
-
     if useSw
       # only use service workers if current page has one
-      @ready = navigator.serviceWorker.ready
-      .catch -> null
-      .then (registration) =>
-        worker = registration?.active
-        if worker
-          @sw = new RPCClient({
-            timeout: timeout
-            postMessage: (msg, origin) =>
-              swMessageChannel = new MessageChannel()
-              swMessageChannel?.port1.onmessage = (e) =>
-                @onMessage e, {isServiceWorker: true}
-              worker.postMessage(
-                msg, [swMessageChannel.port2]
-              )
-          })
+      @ready = new Promise (resolve, reject) ->
+        readyTimeout = setTimeout resolve, SW_CONNECT_TIMEOUT_MS
+
+        navigator.serviceWorker.ready
+        .catch -> null
+        .then (registration) =>
+          worker = registration?.active
+          if worker
+            @sw = new RPCClient({
+              timeout: timeout
+              postMessage: (msg, origin) =>
+                swMessageChannel = new MessageChannel()
+                swMessageChannel?.port1.onmessage = (e) =>
+                  @onMessage e, {isServiceWorker: true}
+                worker.postMessage(
+                  msg, [swMessageChannel.port2]
+                )
+            })
+          clearTimeout readyTimeout
+          resolve()
     else
       @ready = Promise.resolve true
 
@@ -99,7 +104,7 @@ class PortalGun
       clearInterval @iabInterval
 
   replyInAppBrowserWindow: (data) =>
-    escapedData = data.replace(/'/g, "\\'")
+    escapedData = data.replace(/'/g, "\'")
     @iabWindow.executeScript {
       code: "
       if(window._portalOnMessage)

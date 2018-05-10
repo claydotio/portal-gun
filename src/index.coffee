@@ -20,7 +20,6 @@ class PortalGun
     timeout ?= null
     @handshakeTimeout ?= DEFAULT_HANDSHAKE_TIMEOUT_MS
     @isListening = false
-    @isLegacy = false # TODO: remove when native apps are updated
     # window?._portalIsInAppBrowser is set by native app. on iOS it isn't set
     # soon enough, so we rely on userAgent
     isInAppBrowser = window?._portalIsInAppBrowser or
@@ -143,13 +142,11 @@ class PortalGun
 
     @clientValidation = @client.call 'ping', null, {timeout: @handshakeTimeout}
     .then (registeredMethods) =>
-      console.log 'got reg', registeredMethods
-      if registeredMethods is 'pong'
-        @isLegacy = true
-      else if @hasParent
+      if @hasParent
         @parentsRegisteredMethods = @parentsRegisteredMethods.concat(
           registeredMethods
         )
+    .catch -> null
 
     @swValidation = @ready.then =>
       @sw.call 'ping', null, {timeout: @handshakeTimeout}
@@ -184,7 +181,7 @@ class PortalGun
         parentError = null
         @clientValidation
         .then =>
-          if not @isLegacy and @parentsRegisteredMethods.indexOf(method) is -1
+          if @parentsRegisteredMethods.indexOf(method) is -1
             return localMethod method, params
           else
             @client.call method, params

@@ -45,7 +45,7 @@ class PortalGun
     useSw ?= navigator.serviceWorker and window.location.protocol isnt 'http:'
     if useSw
       # only use service workers if current page has one
-      @ready = new Promise (resolve, reject) ->
+      @ready = new Promise (resolve, reject) =>
         readyTimeout = setTimeout resolve, SW_CONNECT_TIMEOUT_MS
 
         navigator.serviceWorker.ready

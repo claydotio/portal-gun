@@ -20,7 +20,6 @@
 # with RPCCallback which should be used to emit callback responses
 ###
 
-Promise = if Promise? then Promise else require 'promiz'
 uuid = require 'uuid'
 
 ERROR_CODES =

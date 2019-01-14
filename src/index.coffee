@@ -1,4 +1,3 @@
-Promise = if Promise? then Promise else require 'promiz'
 _map = require 'lodash/map'
 _isEmpty = require 'lodash/isEmpty'
 

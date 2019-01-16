@@ -4,7 +4,7 @@ _isEmpty = require 'lodash/isEmpty'
 RPCClient = require './rpc_client'
 
 DEFAULT_HANDSHAKE_TIMEOUT_MS = 10000 # 10 seconds
-SW_CONNECT_TIMEOUT_MS = 3000 # 3s
+SW_CONNECT_TIMEOUT_MS = 5000 # 5s
 
 selfWindow = if window? then window else self
 
@@ -48,7 +48,9 @@ class PortalGun
         readyTimeout = setTimeout resolve, SW_CONNECT_TIMEOUT_MS
 
         navigator.serviceWorker.ready
-        .catch -> null
+        .catch ->
+          console.log 'caught sw error'
+          null
         .then (registration) =>
           worker = registration?.active
           if worker
@@ -148,7 +150,7 @@ class PortalGun
     .catch -> null
 
     @swValidation = @ready.then =>
-      @sw.call 'ping', null, {timeout: @handshakeTimeout}
+      @sw?.call 'ping', null, {timeout: @handshakeTimeout}
     .then (registeredMethods) =>
       @parentsRegisteredMethods = @parentsRegisteredMethods.concat(
         registeredMethods

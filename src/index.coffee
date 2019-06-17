@@ -41,7 +41,9 @@ class PortalGun
           @parent?.postMessage msg, origin
     })
 
-    useSw ?= navigator.serviceWorker and window.location.protocol isnt 'http:'
+    useSw ?= navigator.serviceWorker and window? and
+              window.location.protocol isnt 'http:'
+
     if useSw
       # only use service workers if current page has one
       @ready = new Promise (resolve, reject) =>

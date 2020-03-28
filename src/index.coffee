@@ -84,7 +84,7 @@ class PortalGun
   setInAppBrowserWindow: (@iabWindow, callback) =>
     # can't use postMessage, so this hacky executeScript works
     readyEvent = if navigator.userAgent.indexOf('iPhone') isnt -1 \
-                 then 'loadstop' # for some reason need to wait for this on iOS
+                 then 'loadstop' \ # for some reason need to wait for this on iOS
                  else 'loadstart'
     @iabWindow.addEventListener readyEvent, =>
       @iabWindow.executeScript {

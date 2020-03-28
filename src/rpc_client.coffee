@@ -164,7 +164,8 @@ module.exports = class RPCClient
   @param {Array<*>} [params]
   @returns {Promise}
   ###
-  call: (method, reqParams = [], {timeout} = {}) =>
+  call: (method, reqParams, {timeout} = {}) =>
+    reqParams or= []
     timeout ?= @timeout
     deferred = deferredFactory()
     params = []

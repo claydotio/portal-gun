@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/claydotio/portal-gun",
   "devDependencies": {
+    "@babel/core": "^7.9.0",
     "b-assert": "^0.1.2",
     "bluebird": "2.3.11",
     "clay-coffeescript-style-guide": "^1.1.0",

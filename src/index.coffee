@@ -1,7 +1,6 @@
-_map = require 'lodash/map'
-_isEmpty = require 'lodash/isEmpty'
+import * as _ from 'lodash-es'
 
-RPCClient = require './rpc_client'
+import RPCClient from './rpc_client'
 
 DEFAULT_HANDSHAKE_TIMEOUT_MS = 10000 # 10 seconds
 SW_CONNECT_TIMEOUT_MS = 5000 # 5s
@@ -97,11 +96,11 @@ class PortalGun
         }, (values) =>
           try
             values = JSON.parse values?[0]
-            unless _isEmpty values
+            unless _.isEmpty values
               @iabWindow.executeScript {
                 code: "localStorage.setItem('portal:queue', '[]')"
               }
-            _map values, callback
+            _.map values, callback
           catch err
             console.log err, values
       , 100
@@ -311,4 +310,4 @@ class PortalGun
   on: (method, fn) =>
     @registeredMethods[method] = fn
 
-module.exports = PortalGun
+export default PortalGun

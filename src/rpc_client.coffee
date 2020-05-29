@@ -20,7 +20,7 @@
 # with RPCCallback which should be used to emit callback responses
 ###
 
-uuid = require 'uuid'
+import uuid from 'uuid'
 
 ERROR_CODES =
   METHOD_NOT_FOUND: -32601
@@ -45,7 +45,7 @@ deferredFactory = ->
 
   return promise
 
-module.exports = class RPCClient
+export default class RPCClient
   @ERROR_CODES: ERROR_CODES
   @ERROR_MESSAGES: ERROR_MESSAGES
   constructor: ({@postMessage, @timeout} = {}) ->

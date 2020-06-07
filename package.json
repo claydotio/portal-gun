@@ -46,6 +46,7 @@
     "webpack": "1.4.13"
   },
   "dependencies": {
+    "@babel/preset-env": "^7.10.2",
     "uuid": "^3.3.2"
   }
 }

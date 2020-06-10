@@ -2,7 +2,7 @@
   "name": "portal-gun",
   "version": "2.0.0",
   "description": "",
-  "main": "src/index.coffee",
+  "main": "src/index.js",
   "scripts": {
     "test": "node_modules/gulp/bin/gulp.js test",
     "watch": "node_modules/gulp/bin/gulp.js watch",

@@ -34,10 +34,10 @@ class PortalGun {
     this.isListening = false
     // window?._portalIsInAppBrowser is set by native app. on iOS it isn't set
     // soon enough, so we rely on userAgent
-    const isInAppBrowser = window?._portalIsInAppBrowser ||
+    const isInAppBrowser = globalThis?.window?._portalIsInAppBrowser ||
                       (navigator.userAgent.indexOf('/InAppBrowser') !== -1)
     this.hasParent = ((typeof window !== 'undefined' && window !== null) && (window.self !== window.top)) || isInAppBrowser
-    this.parent = window?.parent
+    this.parent = globalThis?.window?.parent
 
     this.client = new RPCClient({
       timeout,

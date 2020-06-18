@@ -1,4 +1,4 @@
-if window?
+if globalThis?.window?
   # Function::bind polyfill for rewirejs + phantomjs
   # coffeelint: disable=missing_fat_arrows
   unless Function::bind

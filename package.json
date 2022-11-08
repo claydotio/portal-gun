@@ -23,7 +23,7 @@
     "b-assert": "^0.1.2",
     "bluebird": "2.3.11",
     "clay-coffeescript-style-guide": "^1.1.0",
-    "coffee-loader": "0.7.2",
+    "coffee-loader": "0.7.3",
     "coffeelint": "^1.11.1",
     "coffeescript": "^2.5.1",
     "del": "0.1.3",
